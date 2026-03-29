@@ -1,0 +1,41 @@
+[project]
+name = "doctools-mcp"
+version = "0.1.0"
+description = "MCP server for document processing and search (PDF, PPTX, Excel, HTML)"
+requires-python = ">=3.10"
+dependencies = [
+    "fastmcp>=1.0.0",
+    "requests>=2.31.0",
+    "python-dotenv>=1.0.0",
+    "pypdf>=4.0.0",
+    "python-pptx>=0.6.23",
+    "openpyxl>=3.1.0",
+    "markitdown[all]>=0.0.1",
+    "Whoosh>=2.7.4",
+    "charset-normalizer>=3.3.0",
+    "pymupdf>=1.23.0",
+    "pywin32>=306; sys_platform == 'win32'"
+]
+
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-mock",
+    "pytest-cov",
+]
+
+[project.scripts]
+doctools-mcp = "doctools.main:main"
+index_ctl = "doctools.index_ctl:main"
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+exclude = ["tests*", "SPECS*"]
+
+[tool.pytest.ini_options]
+pythonpath = "src"
