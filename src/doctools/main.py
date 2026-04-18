@@ -18,7 +18,8 @@ from doctools.pptx_service import (
     count_slides as pptx_count_slides_svc,
     extract_text_as_markdown as pptx_extract_markdown_svc,
     extract_slides as pptx_extract_slides_svc,
-    export_slides_to_images as pptx_export_images_svc
+    export_slides_to_images as pptx_export_images_svc,
+    merge_pptx as pptx_merge_svc
 )
 from doctools.excel_service import (
     list_sheets as xlsx_list_sheets_svc,
@@ -201,6 +202,25 @@ def pptx_extract_images(input_path: str, output_dir: str = None, slides: list[in
         height: Height of the exported images (default 720).
     """
     return to_json(pptx_export_images_svc(input_path, output_dir, slides, width, height))
+
+@mcp.tool
+def pptx_merge(input_paths: list[str], output_path: str) -> str:
+    """Merge multiple PowerPoint files into a single file.
+    
+    This tool combines several PPTX files into one, appending them in the order provided.
+    It uses Windows PowerPoint to ensure that formatting and slide masters are preserved.
+    
+    Args:
+        input_paths: A list of absolute paths to the source PPTX files.
+                     Example: ["C:/docs/part1.pptx", "C:/docs/part2.pptx"]
+        output_path: The absolute path where the merged PPTX file will be saved.
+    """
+    if not isinstance(input_paths, list):
+        return to_json({"status": "error", "detail": "input_paths must be a list."})
+    if not input_paths:
+        return to_json({"status": "error", "detail": "input_paths list cannot be empty."})
+        
+    return to_json(pptx_merge_svc(input_paths, output_path))
 
 # --- Excel Tools ---
 

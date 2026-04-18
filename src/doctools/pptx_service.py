@@ -274,3 +274,64 @@ def export_slides_to_images(
                 powerpoint.Quit()
             except:
                 pass
+
+def merge_pptx(input_paths: list[str], output_path: str) -> dict:
+    """
+    Merge multiple PowerPoint files into one.
+    
+    Args:
+        input_paths: List of paths to the source PPTX files.
+        output_path: Path to save the merged PPTX file.
+        
+    Returns:
+        dict: Result of the operation including status and output path.
+    """
+    powerpoint = None
+    base_presentation = None
+    try:
+        if not input_paths:
+            raise ValueError("Input paths list is empty.")
+            
+        abs_input_paths = [os.path.abspath(p) for p in input_paths]
+        for p in abs_input_paths:
+            if not os.path.exists(p):
+                raise FileNotFoundError(f"Input file not found: {p}")
+                
+        abs_output_path = os.path.abspath(output_path)
+        
+        # Initialize PowerPoint COM
+        powerpoint = win32com.client.Dispatch("PowerPoint.Application")
+        
+        # Open the first file as the base presentation
+        base_presentation = powerpoint.Presentations.Open(abs_input_paths[0], WithWindow=False)
+        
+        # Insert slides from subsequent files
+        for i in range(1, len(abs_input_paths)):
+            # InsertFromFile(FileName, Index, SlideStart, SlideEnd)
+            # Index: The index of the slide after which the new slides are inserted.
+            # To append to the end, use the current slide count.
+            slide_count = base_presentation.Slides.Count
+            base_presentation.Slides.InsertFromFile(abs_input_paths[i], slide_count)
+            
+        # Save the merged presentation
+        base_presentation.SaveAs(abs_output_path)
+        
+        return {
+            "status": "success",
+            "message": "PowerPoint files merged successfully.",
+            "output_path": abs_output_path
+        }
+        
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+    finally:
+        if base_presentation:
+            try:
+                base_presentation.Close()
+            except:
+                pass
+        if powerpoint:
+            try:
+                powerpoint.Quit()
+            except:
+                pass

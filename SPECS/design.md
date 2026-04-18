@@ -44,6 +44,7 @@
 | PowerPoint操作 | PPTX-F02 | pptx_extract_slides | PPTX スライド切り出しとファイル保存 | PPTX-02 |
 | PowerPoint操作 | PPTX-F03 | pptx_count_slides | PPTX 総スライド数取得 | PPTX-03 |
 | PowerPoint操作 | PPTX-F04 | pptx_extract_images | 指定スライドを画像（PNG/JPG）として保存 | PPTX-04 |
+| PowerPoint操作 | PPTX-F05 | pptx_merge | 複数の PowerPoint ファイルを、指定された順番で1つのファイルに結合する。 | PPTX-05 |
 | Excel操作 | XLSX-F01 | xlsx_extract_csv | Excel シートの CSV 保存 | XLSX-01 |
 | Excel操作 | XLSX-F02 | xlsx_extract_sheet | Excel シート切り出しとファイル保存 | XLSX-02 |
 | Excel操作 | XLSX-F03 | xlsx_extract_markdown | Excel シートの Markdown 保存 | XLSX-03 |
@@ -126,6 +127,15 @@
       - `Presentation.Slides(index).Export` メソッドを呼び出し、高精度な画像エクスポートを実現する。
       - 指定された解像度（幅・高さ）に基づいて画像サイズを調整する。
       - 絶対パスの解決、および例外発生時のプレゼンテーションのクローズとアプリケーションの終了を確実に行い、ゾンビプロセスの発生を防止する。
+
+- PPTX-F05: pptx_merge
+   - 概要: 複数の PowerPoint ファイルを、指定された順番で1つのファイルに結合する。
+   - 対応要件: PPTX-05
+   - 設計のポイント
+      - `pywin32` (win32com.client) を使用して、Windows 環境の PowerPoint をバックグラウンドで操作する。
+      - 最初のファイルをベースのプレゼンテーションとして開き、2番目以降のファイルのスライドを `InsertFromFile` メソッドを使用して末尾に順次挿入する。
+      - スライドマスターやレイアウト、アニメーション設定を可能な限り維持して結合する。
+      - 処理完了後、指定された出力パスにファイルを保存する。
 
 ### 機能カテゴリ: Excel操作 (XLSX)
 
@@ -490,7 +500,7 @@ PDF, PowerPoint, Excel, CSV, HTML, 共通ユーティリティ および全文�
     - `input_path`: string (必須) - 元のPPTXファイルのパス。
     - `output_path`: string (必須) - 出力先PPTXファイルのパス。
     - `start_slide`: integer (必須) - 開始スライド番号。
-    - `end_slide`: integer (終了スライド番号。
+    - `end_slide`: integer (必須) - 終了スライド番号。
 - **処理概要**:
     - 指定範囲のスライドを抽出し、新しい PowerPoint ファイルとして保存する。
 - **出力**:
@@ -508,6 +518,16 @@ PDF, PowerPoint, Excel, CSV, HTML, 共通ユーティリティ および全文�
     - Windows 環境の PowerPoint を操作し、指定されたスライドを高精度な画像（PNG/JPG形式）としてエクスポートする。
 - **出力**:
     - 成功時: JSON文字列 `{"status": "success", "output_paths": ["...", "..."]}`
+
+##### ツール名: `pptx_merge`
+
+- **入力**:
+    - `input_paths`: list[string] (必須) - 結合する PowerPoint ファイルのパスのリスト（結合順）。
+    - `output_path`: string (必須) - 出力先 PowerPoint ファイルのパス。
+- **処理概要**:
+    - `pywin32` を使用して、指定された順序で PowerPoint ファイルを結合し、新しいファイルとして保存する。
+- **出力**:
+    - 成功時: JSON文字列 `{"status": "success", "message": "PowerPoint files merged successfully.", "output_path": "..."}`
 
 ##### ツール名: `xlsx_list_sheets`
 
@@ -831,6 +851,7 @@ classDiagram
 | `pptx_extract_markdown` | `input_path`, `output_path`, ... | `pptx_service` を呼び出して Markdown 抽出を実行する。 | `str` (JSON) |
 | `pptx_extract_slides` | `input_path`, `output_path`, `start`, `end` | `pptx_service` を呼び出してスライド抽出を実行する。 | `str` (JSON) |
 | `pptx_extract_images` | `input_path`, `output_dir`, `slides`, `width`, `height` | `pptx_service` を呼び出してスライド画像化を実行する。 | `str` (JSON) |
+| `pptx_merge` | `input_paths`, `output_path` | `pptx_service` を呼び出して結合を実行する。 | `str` (JSON) |
 | `xlsx_extract_csv` | `input_path`, `output_dir`, ... | `excel_service` を呼び出して CSV 抽出を実行する。 | `str` (JSON) |
 | `csv_read_cells` | `path`, `start_row`, `end_row`, ... | `csv_service` を呼び出して範囲指定抽出を実行する。 | `str` (JSON) |
 | `csv_extract_to_file` | `input_path`, `output_path`, ... | `csv_service` を呼び出して範囲指定抽出（ファイル出力）を実行する。 | `str` (JSON) |
@@ -861,6 +882,7 @@ classDiagram
 | `extract_slides` | `input_path`, `output_path`, `start`, `end` | 指定スライドを新しい PPTX に書き出す。 | `dict`: 出力パス |
 | `export_slides_to_images` | `input_path`, `output_dir`, `slides`, `width`, `height` | スライドを画像ファイルとしてエクスポートする（Windows環境）。 | `dict`: 出力パスリスト |
 | `extract_text_as_markdown` | `input_path`, `output_path`, ... | テキスト・表を抽出し Markdown ファイルに保存する。 | `dict`: 出力パス |
+| `merge_pptx` | `input_paths`, `output_path` | 複数の PPTX を結合して保存する。 | `dict`: 出力パス |
 | `count_slides` | `input_path` | 総スライド数を取得する。 | `dict`: スライド数 |
 
 *   **src/doctools/excel_service.py**
@@ -951,3 +973,4 @@ classDiagram
 ## エラーハンドリング
 - Service Layer で `requests.exceptions.RequestException` などを捕捉し、呼び出し元（MCP Layer）に扱いやすい形式（例外またはエラー辞書）で返す。
 - Interface Layer で環境変数の未設定エラーなどを捕捉し、エラー辞書としてクライアントに返す。
+
