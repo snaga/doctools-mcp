@@ -35,6 +35,11 @@ from doctools.csv_service import (
     csv_extract_to_file as csv_extract_to_file_svc
 )
 from doctools.html_service import extract_text_as_markdown as html_extract_markdown_svc
+from doctools.image_service import (
+    get_image_metadata as image_get_metadata_svc,
+    crop_image as image_crop_svc,
+    save_clipboard_image as image_save_clipboard_svc
+)
 from doctools.text_service import (
     convert_file_encoding as convert_encoding_svc, 
     read_head as read_head_svc, 
@@ -348,6 +353,48 @@ def html_extract_markdown(input_path: str, output_path: str = None) -> str:
         output_path: Path to the output Markdown file (optional).
     """
     return to_json(html_extract_markdown_svc(input_path, output_path))
+
+# --- Image Tools ---
+
+@mcp.tool
+def image_get_metadata(path: str) -> str:
+    """Get metadata (width and height) of an image file.
+    
+    Args:
+        path: Path to the image file.
+    """
+    return to_json(image_get_metadata_svc(path))
+
+@mcp.tool
+def image_crop(path: str, left: int, top: int, right: int, bottom: int, output_path: str = None) -> str:
+    """Crop an image with the specified coordinates.
+    
+    Args:
+        path: Path to the source image file.
+        left: The left boundary of the crop box.
+        top: The top boundary of the crop box.
+        right: The right boundary of the crop box.
+        bottom: The bottom boundary of the crop box.
+        output_path: Path for the output cropped image (optional).
+    """
+    return to_json(image_crop_svc(path, left, top, right, bottom, output_path))
+
+@mcp.tool
+def image_save_clipboard(output_dir: str = None, filename: str = None) -> str:
+    """
+    Windows クリップボードから画像を取得し、PNG ファイルとして保存します。
+
+    Args:
+        output_dir: 保存先のディレクトリパス（任意）。未指定時はカレントディレクトリ。
+        filename: 保存するファイル名（任意）。未指定時は 'clipboard_YYYYMMDD_HHMMSS.png' を自動生成。
+
+    Returns:
+        JSON string containing the status and the absolute path of the saved image.
+        
+    Example:
+        Output: {"status": "success", "message": "Image saved...", "output_path": "C:/path/to/clipboard_20260428_120000.png"}
+    """
+    return to_json(image_save_clipboard_svc(output_dir, filename))
 
 # --- Text Tools ---
 

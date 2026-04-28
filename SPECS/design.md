@@ -9,6 +9,7 @@
     - [機能カテゴリ: Excel操作 (XLSX)](#機能カテゴリ-excel操作-xlsx)
     - [機能カテゴリ: CSV操作 (CSV)](#機能カテゴリ-csv操作-csv)
     - [機能カテゴリ: HTML操作 (HTML)](#機能カテゴリ-html操作-html)
+    - [機能カテゴリ: 画像操作 (IMAGE)](#機能カテゴリ-画像操作-image)
     - [機能カテゴリ: 共通ユーティリティ (UTIL)](#機能カテゴリ-共通ユーティリティ-util)
     - [機能カテゴリ: 検索・インデックス (SEARCH)](#機能カテゴリ-検索・インデックス-search)
 
@@ -55,6 +56,9 @@
 | CSV操作 | CSV-F03 | csv_get_metadata | 文字コード、総行数、列数などのメタ情報を取得 | CSV-03 |
 | CSV操作 | CSV-F04 | csv_extract_to_file | 行・列の範囲を指定してデータを別ファイルに出力 | CSV-04 |
 | HTML操作 | HTML-F01 | html_extract_markdown | HTMLファイルをMarkdownに変換してファイル保存 | HTML-01 |
+| 画像操作 | IMAGE-F01 | image_get_metadata | 画像のメタデータ（サイズ）取得 | IMG-01 |
+| 画像操作 | IMAGE-F02 | image_crop | 画像の切り抜き（Crop） | IMG-02 |
+| 画像操作 | IMAGE-F03 | image_save_clipboard | クリップボード画像の保存 | IMG-03 |
 | テキスト操作 | TEXT-F01 | text_convert_encoding | ファイルの文字コード変換と保存 | TEXT-01 |
 | テキスト操作 | TEXT-F02 | text_read_head | テキストファイルの先頭行抽出 | TEXT-02 |
 | テキスト操作 | TEXT-F03 | text_read_tail | テキストファイルの末尾行抽出 | TEXT-03 |
@@ -179,7 +183,7 @@
    - 対応要件: CSV-01
    - 設計のポイント
       - 巨大なファイルを考慮し、標準の `csv` モジュールを使用してストリーム読み込みを行う。
-      - 必要な行範囲のみを処理することでメモリ消費を最小限に抑える。
+      - 必要な行範囲のみを処理することでメモリ効率を高める。
       - `header_row` 指定に基づき、列ラベルを生成する。
       - 結果はコンパクトな JSON 2次元配列（各行の先頭に行番号を含む）で返却し、コンテキスト消費を最小化する。
 
@@ -212,6 +216,30 @@
    - 設計のポイント
       - `MarkItDown` ライブラリを使用して HTML を Markdown に変換する。
       - 既存のドキュメント抽出ツールと同様、大容量データを考慮し、ファイルとして出力する。
+
+### 機能カテゴリ: 画像操作 (IMAGE)
+
+- IMAGE-F01: image_get_metadata
+   - 概要: 画像ファイル（PNG等）からメタデータ（幅・高さ）を取得する。
+   - 対応要件: IMG-01
+   - 設計のポイント
+      - `Pillow` (PIL) を使用して画像を開き、`size` 属性から幅と高さを取得する。
+
+- IMAGE-F02: image_crop
+   - 概要: 画像の指定された矩形領域を切り抜き、別ファイルとして保存する。
+   - 対応要件: IMG-02
+   - 設計のポイント
+      - `Pillow` の `crop((left, top, right, bottom))` メソッドを使用する。
+      - 出力パスが指定されない場合は、元ファイル名に `_cropped` を付与したパスを自動生成する。
+
+- IMAGE-F03: image_save_clipboard
+   - 概要: Windows クリップボードから画像を取得し、PNG ファイルとして保存する。
+   - 対応要件: IMG-03
+   - 設計のポイント
+      - `Pillow` (PIL) の `ImageGrab.grabclipboard()` を使用して画像を取得する。
+      - 指定された `output_dir` が存在しない場合は、`os.makedirs` で作成する。
+      - `filename` 未指定時は、`datetime.now().strftime("%Y%m%d_%H%M%S")` を用いてファイル名を生成する。
+      - 保存完了後、絶対パスを返却する。
 
 ### 機能カテゴリ: テキスト操作 (TEXT)
 
@@ -356,6 +384,7 @@ graph TD
         UtilSvc[util_service.py]
         SearchSvc[search_service.py]
         IndexCtl[index_ctl.py]
+        ImageSvc[image_service.py]
     end
 
     subgraph "Infrastructure / External"
@@ -375,6 +404,7 @@ graph TD
     DocMCP --> TextSvc
     DocMCP --> UtilSvc
     DocMCP --> SearchSvc
+    DocMCP --> ImageSvc
 
     PdfSvc --> FileSystem
     PptxSvc --> FileSystem
@@ -383,13 +413,14 @@ graph TD
     SearchSvc --> WhooshIdx
     IndexCtl --> WhooshIdx
     IndexCtl --> FileSystem
+    ImageSvc --> FileSystem
 ```
 
 ## インターフェース
 
 ### 1. doctools-mcp (ドキュメント操作系)
 
-PDF, PowerPoint, Excel, CSV, HTML, 共通ユーティリティ および全文検索機能を提供するインターフェース群である。
+PDF, PowerPoint, Excel, CSV, HTML, 画像操作, テキスト操作, 共通ユーティリティ および全文検索機能を提供するインターフェース群である。
 
 #### ツール一覧
 | ツール名 | 概要 |
@@ -402,6 +433,7 @@ PDF, PowerPoint, Excel, CSV, HTML, 共通ユーティリティ および全文�
 | `pptx_extract_markdown` | PowerPoint テキスト抽出 (Markdown) |
 | `pptx_extract_slides` | PowerPoint スライド切り出し |
 | `pptx_extract_images` | PowerPoint スライド画像化 |
+| `pptx_merge` | PowerPoint ファイル結合 |
 | `xlsx_list_sheets` | Excel シート名一覧取得 |
 | `xlsx_extract_markdown` | Excel シート抽出 (Markdown) |
 | `xlsx_extract_csv` | Excel シート抽出 (CSV) |
@@ -412,6 +444,9 @@ PDF, PowerPoint, Excel, CSV, HTML, 共通ユーティリティ および全文�
 | `csv_search_values` | CSV データ検索 |
 | `csv_get_metadata` | CSV メタデータ取得 |
 | `html_extract_markdown` | HTML テキスト抽出 (Markdown) |
+| `image_get_metadata` | 画像サイズ（幅・高さ）の取得 |
+| `image_crop` | 画像の切り抜き（Crop） |
+| `image_save_clipboard` | クリップボード画像の保存 |
 | `text_convert_encoding` | ファイルの文字コード変換 |
 | `text_read_head` | テキスト先頭行抽出 |
 | `text_read_tail` | テキスト末尾行抽出 |
@@ -643,6 +678,40 @@ PDF, PowerPoint, Excel, CSV, HTML, 共通ユーティリティ および全文�
 - **出力**:
     - 成功時: JSON文字列 `{"status": "success", "output_path": "..."}`
 
+##### ツール名: `image_get_metadata`
+
+- **入力**:
+    - `path`: string (必須) - 画像ファイルのパス。
+- **処理概要**:
+    - `Pillow` を使用して画像の幅と高さを取得する。
+- **出力**:
+    - 成功時: JSON文字列 `{"status": "success", "width": 1024, "height": 768}`
+
+##### ツール名: `image_crop`
+
+- **入力**:
+    - `path`: string (必須) - 元の画像ファイルのパス。
+    - `left`: integer (必須) - 切り抜き範囲の左端ピクセル。
+    - `top`: integer (必須) - 切り抜き範囲の上端ピクセル。
+    - `right`: integer (必須) - 切り抜き範囲の右端ピクセル。
+    - `bottom`: integer (必須) - 切り抜き範囲の下端ピクセル。
+    - `output_path`: string (任意) - 保存先のパス。
+- **処理概要**:
+    - `Pillow` を使用して指定された範囲を切り抜き、ファイルとして保存する。
+- **出力**:
+    - 成功時: JSON文字列 `{"status": "success", "message": "Image cropped successfully.", "output_path": "..."}`
+
+##### ツール名: `image_save_clipboard`
+
+- **入力**:
+    - `output_dir`: string (任意) - 保存先のディレクトリパス。
+    - `filename`: string (任意) - 保存するファイル名。未指定時はタイムスタンプから自動生成。
+- **処理概要**:
+    - Windows クリップボードから画像データを取得し、PNG 形式でファイルとして保存する。
+- **出力**:
+    - 成功時: JSON文字列 `{"status": "success", "message": "Image saved from clipboard successfully.", "output_path": "..."}`
+    - 失敗時（画像なし）: JSON文字列 `{"status": "error", "message": "No image found in clipboard."}`
+
 ##### ツール名: `text_convert_encoding`
 
 - **入力**:
@@ -862,6 +931,9 @@ classDiagram
 | `text_get_metadata` | `path` | `text_service` を呼び出してメタデータ取得を実行する。 | `str` (JSON) |
 | `zip_files` | `file_paths`, `output_path` | `util_service` を呼び出してZIP圧縮を実行する。 | `str` (JSON) |
 | `unzip_file` | `zip_path`, `output_dir` | `util_service` を呼び出してZIP解凍を実行する。 | `str` (JSON) |
+| `image_get_metadata` | `path` | `image_service` を呼び出してサイズ取得を実行する。 | `str` (JSON) |
+| `image_crop` | `path`, `left`, `top`, ... | `image_service` を呼び出して切り抜きを実行する。 | `str` (JSON) |
+| `image_save_clipboard` | `output_dir`, `filename` | `image_service` を呼び出してクリップボード画像の保存を実行する。 | `str` (JSON) |
 | `list_indexes` | なし | `search_service` を呼び出してインデックス一覧を取得する。 | `str` (JSON) |
 
 *   **src/doctools/pdf_service.py**
@@ -932,6 +1004,15 @@ classDiagram
 | `zip_files` | `file_paths`, `output_path` | 指定されたファイルをZIP形式で圧縮保存する。 | `dict`: 出力パス |
 | `unzip_file` | `zip_path`, `output_dir` | ZIPファイルを指定ディレクトリに解凍し、全ファイルパスを返す。 | `dict`: ファイルリスト |
 
+*   **src/doctools/image_service.py**
+    *   **責務**: 画像ファイルの操作を担当。`Pillow` ラッパー。
+
+| 関数名 | 入力 (Input) | 処理概要 (Processing) | 出力 (Output) |
+| :--- | :--- | :--- | :--- |
+| `get_image_metadata` | `path` | 画像を開き、幅と高さを取得する。 | `dict`: メタデータ |
+| `crop_image` | `path`, `left`, `top`, ... | 指定範囲を切り抜き、別ファイルに保存する。 | `dict`: 出力パス |
+| `save_clipboard_image` | `output_dir`, `filename` | クリップボードから画像を取得し、PNG形式で保存する。 | `dict`: 出力パス |
+
 *   **src/doctools/search_service.py**
     *   **責務**: 全文検索の実行を担当。絞り込み機能を含む。
 
@@ -971,6 +1052,6 @@ classDiagram
 - `updated_at`: string (ISO8601日時)
 
 ## エラーハンドリング
-- Service Layer で `requests.exceptions.RequestException` などを捕捉し、呼び出し元（MCP Layer）に扱いやすい形式（例外またはエラー辞書）で返す。
+- Service Layer で発生した例外を捕捉し、呼び出し元（MCP Layer）に扱いやすい形式（例外またはエラー辞書）で返す。
 - Interface Layer で環境変数の未設定エラーなどを捕捉し、エラー辞書としてクライアントに返す。
 
