@@ -53,6 +53,11 @@ Gemini-CLI 等の AI エージェントが、PDF, PowerPoint, Excel, CSV, HTML �
 #### HTML ツール
 - `html_extract_markdown`: HTML からテキストを抽出し、Markdown ファイルとして保存します。
 
+#### 画像操作ツール
+- `image_get_metadata`: 画像ファイル（PNG等）のサイズ（幅・高さ）を取得します。
+- `image_crop`: 画像の指定された矩形領域（ピクセル単位）を切り抜き、別ファイルとして保存します。
+- `image_save_clipboard`: Windows クリップボードにある画像を PNG ファイルとして保存します。他のアプリで使用中の画面をサクッと LLM に共有するのに非常に便利です。
+
 #### ユーティリティ
 - `zip_files`: 指定したファイル群を ZIP アーカイブに圧縮します。
 - `unzip_file`: ZIP アーカイブを解凍します。
