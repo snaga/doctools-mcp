@@ -4,6 +4,7 @@ import io
 import os
 import win32com.client
 from doctools.pdf_service import export_pages_to_images as pdf_to_images
+from doctools.util_service import format_error_response
 
 def list_sheets(input_path: str) -> dict:
     """
@@ -27,7 +28,7 @@ def list_sheets(input_path: str) -> dict:
         }
         
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)
     finally:
         if workbook:
             workbook.close()
@@ -94,7 +95,7 @@ def extract_csv(input_path: str, output_dir: str = None, sheet_names: list[str] 
         }
         
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)
     finally:
         if workbook:
             workbook.close()
@@ -160,7 +161,7 @@ def extract_markdown_to_file(input_path: str, output_path: str = None, sheet_nam
         }
         
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)
     finally:
         if workbook:
             workbook.close()
@@ -200,7 +201,7 @@ def extract_sheet(input_path: str, output_path: str, sheet_name: str) -> dict:
         }
         
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)
     finally:
         if workbook:
             workbook.close()
@@ -302,7 +303,7 @@ def export_sheets_to_images(
         }
 
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)
     finally:
         if workbook:
             try:

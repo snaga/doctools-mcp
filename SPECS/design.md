@@ -64,6 +64,7 @@
 | テキスト操作 | TEXT-F03 | text_read_tail | テキストファイルの末尾行抽出 | TEXT-03 |
 | テキスト操作 | TEXT-F04 | text_grep | テキストファイル内検索 | TEXT-04 |
 | テキスト操作 | TEXT-F05 | text_get_metadata | テキストファイルメタデータ取得 | TEXT-05 |
+| テキスト操作 | TEXT-F06 | text_copy_clipboard | テキストのクリップボードコピー | TEXT-06 |
 | 共通ユーティリティ | UTIL-F01 | zip_files | 複数ファイルのZIP圧縮保存 | UTIL-01 |
 | 共通ユーティリティ | UTIL-F02 | unzip_file | ZIPファイルの解凍 | UTIL-02 |
 | 検索・インデックス | SEARCH-F01 | search_documents | Office 文書の全文検索（絞り込み・インデックス指定対応） | SEARCH-02, SEARCH-04, SEARCH-05, SEARCH-08 |
@@ -281,6 +282,14 @@
       - `charset-normalizer` でエンコーディングを自動判定する。
       - `os.path.getsize` でファイルサイズを取得する。
       - ファイルをストリーム読み込みして行数をカウントする。
+
+- TEXT-F06: text_copy_clipboard
+   - 概要: 指定されたテキストを Windows のクリップボードにコピーする。
+   - 対応要件: TEXT-06
+   - 設計のポイント
+      - `pywin32` (win32clipboard) を使用して、クリップボードへのアクセスとデータ書き込みを行う。
+      - `win32con.CF_UNICODETEXT` 形式を使用して、日本語などの Unicode 文字が正しくコピーされることを保証する。
+      - クリップボード操作は `OpenClipboard` から `CloseClipboard` までを `try...finally` で囲み、エラー時も確実に解放する。
 
 ### 機能カテゴリ: 共通ユーティリティ (UTIL)
 
@@ -710,7 +719,7 @@ PDF, PowerPoint, Excel, CSV, HTML, 画像操作, テキスト操作, 共通ユ�
     - Windows クリップボードから画像データを取得し、PNG 形式でファイルとして保存する。
 - **出力**:
     - 成功時: JSON文字列 `{"status": "success", "message": "Image saved from clipboard successfully.", "output_path": "..."}`
-    - 失敗時（画像なし）: JSON文字列 `{"status": "error", "message": "No image found in clipboard."}`
+    - 失敗時（画像なし）: JSON文字列 `{"status": "error", "detail": "No image found in clipboard.", "type": "RuntimeError"}`
 
 ##### ツール名: `text_convert_encoding`
 
@@ -769,6 +778,15 @@ PDF, PowerPoint, Excel, CSV, HTML, 画像操作, テキスト操作, 共通ユ�
     - ファイルの総行数をカウントする。
 - **出力**:
     - 成功時: JSON文字列 `{"status": "success", "encoding": "utf-8", "size": 1024, "lines": 50}`
+
+##### ツール名: `text_copy_clipboard`
+
+- **入力**:
+    - `text`: string (必須) - クリップボードにコピーするテキスト文字列。
+- **処理概要**:
+    - 実行環境のクリップボードに、指定されたテキストデータを書き込む。
+- **出力**:
+    - 成功時: JSON文字列 `{"status": "success", "message": "Text copied to clipboard successfully."}`
 
 ##### ツール名: `zip_files`
 
@@ -927,8 +945,9 @@ classDiagram
 | `text_convert_encoding` | `input_path`, `output_enc`, ... | `text_service` を呼び出して文字コード変換を実行する。 | `str` (JSON) |
 | `text_read_head` | `path`, `n_lines` | `text_service` を呼び出して先頭行抽出を実行する。 | `str` (JSON) |
 | `text_read_tail` | `path`, `n_lines` | `text_service` を呼び出して末尾行抽出を実行する。 | `str` (JSON) |
-| `text_grep` | `path`, `pattern` | `text_service` を呼び出して検索を実行する。 | `str` (JSON) |
+| `text_grep` | `path`, `pattern`, `encoding` | `text_service` を呼び出してGrep検索を実行する。 | `str` (JSON) |
 | `text_get_metadata` | `path` | `text_service` を呼び出してメタデータ取得を実行する。 | `str` (JSON) |
+| `text_copy_clipboard` | `text` | `text_service` を呼び出してテキストコピーを実行する。 | `str` (JSON) |
 | `zip_files` | `file_paths`, `output_path` | `util_service` を呼び出してZIP圧縮を実行する。 | `str` (JSON) |
 | `unzip_file` | `zip_path`, `output_dir` | `util_service` を呼び出してZIP解凍を実行する。 | `str` (JSON) |
 | `image_get_metadata` | `path` | `image_service` を呼び出してサイズ取得を実行する。 | `str` (JSON) |
@@ -995,6 +1014,7 @@ classDiagram
 | `read_tail` | `path`, `n_lines`, `encoding` | 末尾から指定行数を読み込む。 | `dict`: 行リスト |
 | `grep_file` | `path`, `pattern`, `encoding` | 正規表現検索を行う。 | `dict`: マッチリスト |
 | `get_metadata` | `path` | エンコーディング、サイズ、行数を取得する。 | `dict`: メタ情報 |
+| `set_clipboard_text` | `text` | テキストをクリップボードにコピーする。 | `dict`: 実行結果 |
 
 *   **src/doctools/util_service.py**
     *   **責務**: 汎用的なユーティリティ機能（ZIP圧縮・解凍等）を担当。
@@ -1054,4 +1074,16 @@ classDiagram
 ## エラーハンドリング
 - Service Layer で発生した例外を捕捉し、呼び出し元（MCP Layer）に扱いやすい形式（例外またはエラー辞書）で返す。
 - Interface Layer で環境変数の未設定エラーなどを捕捉し、エラー辞書としてクライアントに返す。
+- **標準エラーレスポンス構造**:
+  AI エージェントがエラーを一貫して処理できるように、エラー発生時は以下の構造を持つ JSON 文字列を返却する。
+  ```json
+  {
+    "status": "error",
+    "detail": "エラーの詳細な説明文（例外メッセージなど）",
+    "type": "FileNotFoundError | ValueError | RuntimeError | ..."
+  }
+  ```
+  - `status`: 常に "error" となる。
+  - `detail`: ユーザーや AI が理解できる具体的なメッセージ。
+  - `type`: 例外のクラス名（例: `ValueError`）。AI がエラーの性質を判断するために使用する。
 

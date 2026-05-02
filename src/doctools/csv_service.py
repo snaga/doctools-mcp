@@ -1,6 +1,7 @@
 import csv
 import os
 from charset_normalizer import from_path
+from doctools.util_service import format_error_response
 
 def get_csv_encoding(path: str) -> dict:
     """
@@ -26,7 +27,7 @@ def csv_get_metadata(path: str) -> dict:
     Get CSV metadata: encoding, total rows, and max columns.
     """
     if not os.path.exists(path):
-        return {"status": "error", "detail": f"File not found: {path}"}
+        return format_error_response(FileNotFoundError(f"File not found: {path}"))
         
     try:
         enc_info = get_csv_encoding(path)
@@ -48,7 +49,7 @@ def csv_get_metadata(path: str) -> dict:
             "max_columns": max_cols
         }
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)
 
 def csv_read_cells(path: str, start_row: int = 1, end_row: int = None, columns: list[int] = None, header_row: int = 0, encoding: str = "shift_jis") -> dict:
     """
@@ -63,7 +64,7 @@ def csv_read_cells(path: str, start_row: int = 1, end_row: int = None, columns: 
         encoding: File encoding.
     """
     if not os.path.exists(path):
-        return {"status": "error", "detail": f"File not found: {path}"}
+        return format_error_response(FileNotFoundError(f"File not found: {path}"))
         
     try:
         result_data = []
@@ -147,14 +148,14 @@ def csv_read_cells(path: str, start_row: int = 1, end_row: int = None, columns: 
             "data": result_data
         }
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)
 
 def csv_search_values(path: str, query: str, encoding: str = "shift_jis") -> dict:
     """
     Search for a string in a CSV file and return cell positions.
     """
     if not os.path.exists(path):
-        return {"status": "error", "detail": f"File not found: {path}"}
+        return format_error_response(FileNotFoundError(f"File not found: {path}"))
         
     try:
         results = []
@@ -175,7 +176,7 @@ def csv_search_values(path: str, query: str, encoding: str = "shift_jis") -> dic
             "results": results
         }
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)
 
 def csv_extract_to_file(input_path: str, output_path: str = None, start_row: int = 1, end_row: int = None, columns: list[int] = None, encoding: str = "shift_jis") -> dict:
     """
@@ -190,7 +191,7 @@ def csv_extract_to_file(input_path: str, output_path: str = None, start_row: int
         encoding: Encoding for both reading and writing.
     """
     if not os.path.exists(input_path):
-        return {"status": "error", "detail": f"File not found: {input_path}"}
+        return format_error_response(FileNotFoundError(f"File not found: {input_path}"))
         
     try:
         if output_path is None:
@@ -230,4 +231,4 @@ def csv_extract_to_file(input_path: str, output_path: str = None, start_row: int
             "output_path": abs_output_path
         }
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)

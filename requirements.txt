@@ -1,11 +1,12 @@
-fastmcp
-requests
-python-dotenv
-pypdf
-python-pptx
-openpyxl
-markitdown[all]
-Whoosh
-charset-normalizer
-pymupdf
-pywin32; sys_platform == 'win32'Pillow
+fastmcp>=1.0.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+pypdf>=4.0.0
+python-pptx>=0.6.23
+openpyxl>=3.1.0
+Pillow>=10.0.0
+markitdown[all]>=0.0.1
+Whoosh>=2.7.4
+charset-normalizer>=3.3.0
+pymupdf>=1.23.0
+pywin32>=306; sys_platform == 'win32'

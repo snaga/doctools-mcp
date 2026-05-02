@@ -45,9 +45,10 @@ from doctools.text_service import (
     read_head as read_head_svc, 
     read_tail as read_tail_svc, 
     grep_file as grep_file_svc,
-    get_metadata as get_metadata_svc
+    get_metadata as get_metadata_svc,
+    set_clipboard_text as set_clipboard_text_svc
 )
-from doctools.util_service import zip_files as zip_files_svc, unzip_file as unzip_file_svc
+from doctools.util_service import zip_files as zip_files_svc, unzip_file as unzip_file_svc, format_error_response
 from doctools.search_service import search_index, list_indexes as list_indexes_svc, BASE_DIR_ENV_VAR
 
 mcp = FastMCP("doctools-mcp")
@@ -72,10 +73,17 @@ def list_indexes() -> str:
     Example:
         Output: {"status": "success", "indexes": [{"name": "project_a", "description": "Docs for Project A"}, ...]}
     """
-    base_dir = os.getenv(BASE_DIR_ENV_VAR)
-    if not base_dir:
-        return to_json({"status": "error", "detail": f"{BASE_DIR_ENV_VAR} environment variable is not set."})
-    return to_json(list_indexes_svc(base_dir))
+    try:
+        base_dir = os.getenv(BASE_DIR_ENV_VAR)
+        if not base_dir:
+            return to_json({
+                "status": "error", 
+                "detail": f"{BASE_DIR_ENV_VAR} environment variable is not set.",
+                "type": "EnvironmentError"
+            })
+        return to_json(list_indexes_svc(base_dir))
+    except Exception as e:
+        return to_json(format_error_response(e))
 
 @mcp.tool
 def search_documents(query: str, directory: str = None, index_name: str = None) -> str:
@@ -104,14 +112,17 @@ def search_documents(query: str, directory: str = None, index_name: str = None) 
                     Searches within `{WHOOSH_INDEX_BASE_DIR}/{index_name}`.
                     If omitted, defaults to "default".
     """
-    base_dir = os.getenv(BASE_DIR_ENV_VAR)
-    
-    return to_json(search_index(
-        query_str=query, 
-        filter_dir=directory,
-        base_dir=base_dir,
-        index_name=index_name
-    ))
+    try:
+        base_dir = os.getenv(BASE_DIR_ENV_VAR)
+        
+        return to_json(search_index(
+            query_str=query, 
+            filter_dir=directory,
+            base_dir=base_dir,
+            index_name=index_name
+        ))
+    except Exception as e:
+        return to_json(format_error_response(e))
 
 # --- PDF Tools ---
 
@@ -221,9 +232,9 @@ def pptx_merge(input_paths: list[str], output_path: str) -> str:
         output_path: The absolute path where the merged PPTX file will be saved.
     """
     if not isinstance(input_paths, list):
-        return to_json({"status": "error", "detail": "input_paths must be a list."})
+        return to_json(format_error_response(TypeError("input_paths must be a list.")))
     if not input_paths:
-        return to_json({"status": "error", "detail": "input_paths list cannot be empty."})
+        return to_json(format_error_response(ValueError("input_paths list cannot be empty.")))
         
     return to_json(pptx_merge_svc(input_paths, output_path))
 
@@ -499,6 +510,26 @@ def text_convert_encoding(input_path: str, output_encoding: str, output_path: st
     """
     res = convert_encoding_svc(input_path, output_encoding, output_path, input_encoding)
     return to_json(res)
+
+@mcp.tool
+def text_copy_clipboard(text: str) -> str:
+    """
+    Copy the specified text to the Windows clipboard.
+    
+    This tool is useful for quickly copying generated content, paths, or extracted text 
+    to the system clipboard for use in other applications.
+    
+    Args:
+        text: The text string to be copied to the clipboard.
+        
+    Returns:
+        JSON string containing the status and a success message.
+        
+    Example:
+        Input: text="Hello from MCP!"
+        Output: {"status": "success", "message": "Text copied to clipboard successfully."}
+    """
+    return to_json(set_clipboard_text_svc(text))
 
 # --- Utility Tools ---
 
