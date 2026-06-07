@@ -10,8 +10,10 @@
     - [機能カテゴリ: CSV操作 (CSV)](#機能カテゴリ-csv操作-csv)
     - [機能カテゴリ: HTML操作 (HTML)](#機能カテゴリ-html操作-html)
     - [機能カテゴリ: 画像操作 (IMAGE)](#機能カテゴリ-画像操作-image)
+    - [機能カテゴリ: テキスト操作 (TEXT)](#機能カテゴリ-テキスト操作-text)
     - [機能カテゴリ: 共通ユーティリティ (UTIL)](#機能カテゴリ-共通ユーティリティ-util)
     - [機能カテゴリ: 検索・インデックス (SEARCH)](#機能カテゴリ-検索・インデックス-search)
+    - [機能カテゴリ: PageIndex (PI)](#機能カテゴリ-pageindex-pi)
 
 - [アーキテクチャ](#アーキテクチャ)
     - [設計方針](#設計方針)
@@ -25,12 +27,17 @@
         - [コマンド一覧](#コマンド一覧-1)
         - [共通設計](#共通設計-1)
         - [個別インターフェース設計](#個別インターフェース設計-1)
+    - [3. CLI (PageIndex Controller)](#3-cli-pageindex-controller)
+        - [コマンド一覧](#コマンド一覧-2)
+        - [共通設計](#共通設計-2)
+        - [個別インターフェース設計](#個別インターフェース設計-2)
 - [コンポーネント](#コンポーネント)
     - [コンポーネント概要 (High-Level Overview)](#コンポーネント概要-high-level-overview)
     - [コンポーネント詳細](#コンポーネント詳細)
         - [1. Document Components](#1-document-components)
 - [データモデル](#データモデル)
     - [検索インデックス (Whoosh)](#検索インデックス-whoosh)
+    - [PageIndex JSON スキーマ](#pageindex-json-スキーマ)
 - [エラーハンドリング](#エラーハンドリング)
 
 ## 機能一覧
@@ -64,6 +71,7 @@
 | テキスト操作 | TEXT-F03 | text_read_tail | テキストファイルの末尾行抽出 | TEXT-03 |
 | テキスト操作 | TEXT-F04 | text_grep | テキストファイル内検索 | TEXT-04 |
 | テキスト操作 | TEXT-F05 | text_get_metadata | テキストファイルメタデータ取得 | TEXT-05 |
+| テキスト操作 | TEXT-F06 | text_copy_clipboard | テキストのクリップボードコピー | TEXT-06 |
 | 共通ユーティリティ | UTIL-F01 | zip_files | 複数ファイルのZIP圧縮保存 | UTIL-01 |
 | 共通ユーティリティ | UTIL-F02 | unzip_file | ZIPファイルの解凍 | UTIL-02 |
 | 検索・インデックス | SEARCH-F01 | search_documents | Office 文書の全文検索（絞り込み・インデックス指定対応） | SEARCH-02, SEARCH-04, SEARCH-05, SEARCH-08 |
@@ -71,6 +79,16 @@
 | 検索・インデックス | SEARCH-F03 | index_ctl (list/del) | インデックスの保守（一覧・削除）（対象指定対応） | SEARCH-03, SEARCH-08, SEARCH-09 |
 | 検索・インデックス | SEARCH-F04 | list_indexes | 利用可能なインデックス一覧と概要の取得 | SEARCH-06, SEARCH-08 |
 | 検索・インデックス | SEARCH-F09 | error_logging | インデックス化エラーの記録、出力、および失敗ファイルの永続化管理 | SEARCH-14, SEARCH-15 |
+| PageIndex | PI-F01 | (Internal) pptx_extract_structure | PPTX のスライド構造とテキスト抽出 | PI-01 |
+| PageIndex | PI-F02 | (Internal) pdf_extract_structure | PDF の TOC とページテキスト抽出 | PI-01 |
+| PageIndex | PI-F03 | (Internal) xlsx_extract_structure | XLSX のシート名とデータサンプリング | PI-01 |
+| PageIndex | PI-F04 | (Internal) validate_pageindex_json | PageIndex JSON のスキーマ検証 | PI-03 |
+| PageIndex | PI-F05 | pageindex_get_tree | PageIndex ツリーの部分的・段階的取得 | PI-04 |
+| PageIndex | PI-F06 | pageindex_get_node_content | 指定されたノード（ページ等）のコンテンツ抽出 | PI-05 |
+| PageIndex | PI-F07 | pageindex_ctl build | PageIndex 構築支援 CLI ツール | PI-02 |
+| PageIndex | PI-F08 | pageindex_ctl export | インデックス情報の CSV エクスポート | PI-02 |
+
+> **設計注記**: PI-F01 〜 PI-F04 は、AI エージェントのコンテキスト（利用可能ツール数）の肥大化を防ぐため、初期フェーズでは内部 Service 関数としてのみ実装し、直接の MCP ツールとしての露出は行わない。ただし、将来的にオンデマンドでのインデックス構築や検証が必要になった際、即座にツール化可能なシグネチャで設計する。
 
 ## 機能詳細
 
@@ -282,6 +300,14 @@
       - `os.path.getsize` でファイルサイズを取得する。
       - ファイルをストリーム読み込みして行数をカウントする。
 
+- TEXT-F06: text_copy_clipboard
+   - 概要: 指定されたテキストを Windows のクリップボードにコピーする。
+   - 対応要件: TEXT-06
+   - 設計のポイント
+      - `pywin32` (win32clipboard) を使用して、クリップボードへのアクセスとデータ書き込みを行う。
+      - `win32con.CF_UNICODETEXT` 形式を使用して、日本語などの Unicode 文字が正しくコピーされることを保証する。
+      - クリップボード操作は `OpenClipboard` から `CloseClipboard` までを `try...finally` で囲み、エラー時も確実に解放する。
+
 ### 機能カテゴリ: 共通ユーティリティ (UTIL)
 
 - UTIL-F01: zip_files
@@ -355,10 +381,124 @@
       - 正常に処理されたファイルが失敗リストに含まれていた場合、そのエントリをメモリ上から削除する（`remove_success`）。
       - `save()` メソッドで、更新された失敗情報を JSON形式で `index_dir/errors.json` に保存する。処理全体がクラッシュした場合でも確実に呼ばれるようにする。
 
+### 機能カテゴリ: PageIndex (PI)
+
+#### 検索・回答生成プロセス (Navigation & Retrieval)
+AI エージェントが MCP ツールを介してドキュメントを探索し、回答するまでの実態フロー。
+
+```mermaid
+sequenceDiagram
+    participant User as ユーザー
+    participant LLM as AI エージェント (LLM)
+    participant MCP_Tree as MCP: pageindex_get_tree
+    participant MCP_Cont as MCP: pageindex_get_node_content
+    participant Svc as Service Layer (PDF/PPTX/XLSX)
+    
+    User->>LLM: 質問 (例: 「BCPの手順は？」)
+    
+    rect rgb(240, 240, 240)
+    Note over LLM, MCP_Tree: 段階的な地図探索
+    LLM->>MCP_Tree: input_path, depth=2 (ルートから章レベルを取得)
+    MCP_Tree-->>LLM: PageIndex サマリー (章のリスト)
+    
+    LLM->>LLM: 推論: 「第5章が怪しいな」
+    
+    LLM->>MCP_Tree: input_path, node_id="ch_05", depth=1 (5章の配下を取得)
+    MCP_Tree-->>LLM: PageIndex サマリー (5章の節リスト)
+    end
+    
+    LLM->>LLM: 推論: 「5.2節の p_045 が正解だ！」
+    
+    LLM->>MCP_Cont: file_path, node_type="pdf", node_id="p_045"
+    MCP_Cont->>Svc: extract_node_content(pages=[45])
+    Svc-->>MCP_Cont: 45ページのフルテキスト
+    MCP_Cont-->>LLM: フルテキストコンテンツ
+    
+    LLM->>LLM: 回答作成 (Synthesize)
+    LLM-->>User: 最終回答 (45ページの証拠に基づく正確な情報)
+```
+
+- PI-F01: pptx_extract_structure
+   - 概要: PowerPoint ファイルの物理構造を抽出する。(Internal Service)
+   - 対応要件: PI-01
+   - 設計のポイント
+      - `python-pptx` を使用し、全スライドを走査。
+      - 各スライドのタイトルと、本文の冒頭（一定文字数）を抽出し、JSON 形式で返却する。
+
+- PI-F02: pdf_extract_structure
+   - 概要: PDF ファイルの物理構造を抽出する。(Internal Service)
+   - 対応要件: PI-01
+   - 設計のポイント
+      - `PyMuPDF (fitz)` を使用し、`get_toc()` で目次情報を取得。
+      - 目次がない場合は全ページを走査し、各ページの冒頭テキストをサンプリングして返却する。
+
+- PI-F03: xlsx_extract_structure
+   - 概要: Excel ファイルの物理構造を抽出する。(Internal Service)
+   - 対応要件: PI-01
+   - 設計のポイント
+      - `openpyxl` を使用し、全シート名を取得。
+      - 各シートの冒頭（1〜10行程度）をサンプリングし、データの性質を AI が判断できる形式で返却する。
+
+- PI-F04: validate_pageindex_json
+   - 概要: PageIndex 互換 JSON の構造検証。(Internal Service)
+   - 対応要件: PI-03
+   - 設計のポイント
+      - `jsonschema` ライブラリを使用。
+      - 再帰的なツリー構造を定義した `PAGEINDEX_SCHEMA` に基づいて検証を行い、エラー箇所を詳細に返却する。
+
+- PI-F05: pageindex_get_tree
+   - 概要: PageIndex JSON ファイルから、指定された階層またはノード配下のツリーを部分的に抽出する。(MCP Tool)
+   - 対応要件: PI-04
+   - 設計のポイント
+      - `node_id` が指定された場合、そのノードを探索し、その配下の子ノードを含むサブツリーを抽出する。
+      - `depth` が指定された場合、指定された深さより深い階層の `nodes` を省略して返却する。
+      - これにより、巨大なインデックスを段階的に AI に提示可能にする。
+
+- PI-F06: pageindex_get_node_content
+   - 概要: インデックス探索で特定された特定のノード（ページ範囲、スライド番号、シート名）の全テキストコンテンツを取得する。(MCP Tool)
+   - 対応要件: PI-05
+   - 設計のポイント
+      - 指定された範囲（`start_index`, `end_index` 等）に基づき、各形式（PDF/PPTX/XLSX）の Service を呼び出してフルテキストを抽出する。
+      - 引数優先順位: 1. `node_id` (インデックス解決), 2. `pages`/`sheet_name` (直接指定)。
+
+- PI-F07: pageindex_ctl build
+   - 概要: 独立した CLI ツールによる PageIndex インデックスの構築支援。
+   - 対応要件: PI-02
+   - 設計のポイント
+      - 対象ファイルの物理構造抽出から、GCP Gemini API または Vertex AI と連携した要約（サマリー）の自動生成、バリデーション、分散保存までをサポートする。
+      - 環境変数 `GOOGLE_GENAI_USE_VERTEXAI` が "true" の場合は Vertex AI を使用し（`GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` を参照）、それ以外で `GEMINI_API_KEY` があれば Gemini API を使用するフォールバックロジックを実装する。
+      - バックエンドの設定が不足している場合は、構築処理を安全に中断し、標準エラーレスポンス形式でエラーを出力する。
+      - リトライポリシー: JSON バリデーションに失敗した場合、AI への再生成依頼を **最大 2 回** まで実行する。
+      - `--recursive` オプションにより、サブディレクトリを再帰的に走査して一括インデックス化を行う。
+      - `--ext` オプションにより、対象とする拡張子（.pdf, .pptx, .xlsx 等）をフィルタリングする。
+      - 生成された `.pageindex.json` は、常に **「対象ドキュメントと同じディレクトリ」** に保存する（分散配置）。
+      - Gemini API / Vertex AI 呼び出しのメタデータから、消費トークン数情報を取得し、構築ログに記録する。
+      - **node_id の命名規則**: AI の推論精度向上のため、以下の標準接頭辞を使用する。
+         - 章・節: `ch_`, `sec_`
+         - PDF ページ: `p_001` (ゼロパディング)
+         - スライド: `slide_01`
+         - シート: `sheet_name`
+      - **title の記載ルール**: 物理的な位置情報を補足する（例: 「第1章: タイトル」, 「スライド12: タイトル」）。
+      - `google-generativeai` または `google-cloud-aiplatform` を利用して認証を行う。
+      - API のレートリミットを考慮したリトライロジックを実装する。
+
+- PI-F08: pageindex_ctl export
+   - 概要: 構築された PageIndex 群のサマリー情報を CSV 形式でエクスポートする。
+   - 対応要件: PI-02
+   - 設計のポイント
+      - 指定されたディレクトリ配下を再帰的に走査し、すべての `.pageindex.json` を収集する。
+      - 各 JSON のルートレベルの「ファイルパス、タイトル、サマリー」を抽出し、一画の CSV ファイルに出力する。
+      - 出力形式: `filepath, title, summary`
+      - 用途: `ripgrep` 等の外部ツールによる高速なキーワード検索の足掛かりとして利用する。
+
 ## アーキテクチャ
 
 ### 設計方針
 
+- **"Map Before House" (まず地図、次に家)**: 全文を読む前に PageIndex（地図）を探索させ、必要な箇所だけをピンポイントで読み込むことで、コンテキスト効率と精度の両立を図る。
+- **段階的探索 (Step-by-step Exploration)**: `pageindex_get_tree` を用いて「章 ➔ 節 ➔ 項」と段階的にツリーを提示するワークフローをサポートする。
+- **スケーラビリティ基準 (3x10x5 ルール)**: 3階層、中間ノード10個、リーフ5ページを基本単位とし、数千ページ規模の探索に対応可能。
+- **トークン効率**: この基準に従うことで、数万トークンを要する全文読み込みに対し、**インデックス探索(約1,500) + 本文読み込み(約3,000) = 合計 4,500 トークン程度**（約 95% 削減）でのリトリーバルを実現できる。
 - **LLMコンテキストの保護 (LLM Context-Aware Design)**: 巨大な実データ（PDF全文や数万行のCSV）を直接LLMに渡さず、ファイルとして保存してそのパスを返す「ハンドルベース・アーキテクチャ」を採用する。これにより、コンテキストウィンドウの消費を最小限に抑え、LLMの処理能力を推論や判断に集中させる。
 - **責務の明確な分離 (Separation of Concerns)**: ビジネスロジック（Service層）と MCP アダプタ（Interface層）を明確に分離し、テスト容易性と再利用性を高める。
 - **インターフェースの自己記述性 (Self-descriptive Interface)**: MCP のインターフェースとなるツール（`@mcp.tool`）には、詳細な Docstring を記述しなければならない。Docstring には、ツールの具体的な使い方、各引数の説明、および実用的なサンプル（入力例や実行結果のイメージ）を含め、AI エージェントが迷わずツールを利用できるようにする。
@@ -370,6 +510,7 @@ graph TD
     User[User] --> MCPHost
     subgraph "AI Agent Layer"
         MCPHost[MCP Host / Gemini-CLI]
+        LLM_Nav[LLM Navigator]
         InterfaceLayer[MCP Client]
     end
     subgraph "Interface Layer (MCP Server)"
@@ -386,15 +527,18 @@ graph TD
         UtilSvc[util_service.py]
         SearchSvc[search_service.py]
         IndexCtl[index_ctl.py]
+        PageIndexCtl[pageindex_ctl.py]
         ImageSvc[image_service.py]
     end
 
     subgraph "Infrastructure / External"
         FileSystem[Local File System]
         WhooshIdx[Whoosh Index]
+        PageIndexFile[PageIndex JSON]
     end
 
     MCPHost --> InterfaceLayer
+    LLM_Nav -.->|PageIndex 探索| PageIndexFile
 
     InterfaceLayer -->|MCP Protocol| DocMCP
 
@@ -415,6 +559,8 @@ graph TD
     SearchSvc --> WhooshIdx
     IndexCtl --> WhooshIdx
     IndexCtl --> FileSystem
+    PageIndexCtl --> PageIndexFile
+    PageIndexCtl --> FileSystem
     ImageSvc --> FileSystem
 ```
 
@@ -458,6 +604,8 @@ PDF, PowerPoint, Excel, CSV, HTML, 画像操作, テキスト操作, 共通ユ�
 | `unzip_file` | ZIPファイルの解凍 |
 | `list_indexes` | インデックス一覧取得 |
 | `search_documents` | 全文検索 (ディレクトリ絞り込み対応) |
+| `pageindex_get_tree` | PageIndex ツリーの部分取得 |
+| `pageindex_get_node_content` | ノードコンテンツ取得 |
 
 #### 共通設計
 - ドキュメントの内容を抽出するツールは、大容量データを考慮し、結果をファイルに保存してそのパスを返す（ハンドルベース・アーキテクチャ）。
@@ -712,7 +860,7 @@ PDF, PowerPoint, Excel, CSV, HTML, 画像操作, テキスト操作, 共通ユ�
     - Windows クリップボードから画像データを取得し、PNG 形式でファイルとして保存する。
 - **出力**:
     - 成功時: JSON文字列 `{"status": "success", "message": "Image saved from clipboard successfully.", "output_path": "..."}`
-    - 失敗時（画像なし）: JSON文字列 `{"status": "error", "message": "No image found in clipboard."}`
+    - 失敗時（画像なし）: JSON文字列 `{"status": "error", "detail": "No image found in clipboard.", "type": "RuntimeError"}`
 
 ##### ツール名: `text_convert_encoding`
 
@@ -772,6 +920,15 @@ PDF, PowerPoint, Excel, CSV, HTML, 画像操作, テキスト操作, 共通ユ�
 - **出力**:
     - 成功時: JSON文字列 `{"status": "success", "encoding": "utf-8", "size": 1024, "lines": 50}`
 
+##### ツール名: `text_copy_clipboard`
+
+- **入力**:
+    - `text`: string (必須) - クリップボードにコピーするテキスト文字列。
+- **処理概要**:
+    - 実行環境のクリップボードに、指定されたテキストデータを書き込む。
+- **出力**:
+    - 成功時: JSON文字列 `{"status": "success", "message": "Text copied to clipboard successfully."}`
+
 ##### ツール名: `zip_files`
 
 - **入力**:
@@ -816,6 +973,17 @@ PDF, PowerPoint, Excel, CSV, HTML, 画像操作, テキスト操作, 共通ユ�
     - インデックス名と説明文のリストを作成して返す。
 - **出力**:
     - 成功時: JSON文字列 `{"status": "success", "indexes": [{"name": "index_a", "description": "Project A Docs", "extensions": [".pdf", ".md"]}, ...]}`
+
+##### ツール名: `pageindex_get_tree`
+- **入力**: `input_path` (必須), `node_id` (任意), `depth` (任意, デフォルト 2)
+- **処理**: PageIndex JSON を読み込み、指定ノードまたは階層までのサブツリーを返却する。
+- **出力**: 成功時、フィルタリングされた JSON 構造の文字列。
+
+##### ツール名: `pageindex_get_node_content`
+- **入力**: `file_path`, `node_type`, `node_id` (任意), `pages` (任意), `sheet_name` (任意)
+- **優先順位**: 1. `node_id` (インデックス解決), 2. `pages`/`sheet_name` (直接指定)
+- **処理**: 指定箇所のフルテキストを抽出し、プレーンテキスト形式で返却する。
+- **出力**: `{"status": "success", "content": "..."}`
 
 ### 2. CLI (Index Controller)
 
@@ -869,6 +1037,71 @@ PDF, PowerPoint, Excel, CSV, HTML, 画像操作, テキスト操作, 共通ユ�
     - `--base-dir` (任意) - ベースディレクトリ。
 - **処理概要**: 指定されたインデックスから、`delete_by_query` と `Prefix` クエリを使用して、指定パス配下の文書を削除する。
 - **出力**: 削除完了メッセージ。
+
+### 3. CLI (PageIndex Controller)
+
+PageIndex の構築・保守を行うコマンドラインインターフェース。
+
+#### コマンド一覧
+| コマンド | 引数 | 概要 |
+| :--- | :--- | :--- |
+| `build` | `<target_path> [--output PATH] [--recursive] [--ext ".pdf .pptx"]` | 指定ファイルまたはディレクトリの PageIndex 構築 |
+| `list` | `<target_dir> [--recursive]` | 指定ディレクトリ内の `.pageindex.json` ファイル一覧表示 |
+| `delete` | `<target_path> [--recursive]` | 指定ファイルまたはディレクトリ配下の `.pageindex.json` 削除 |
+| `export` | `<target_dir>` | 全インデックス情報の CSV エクスポート |
+
+#### 共通設計
+- 実行形式: `python src/doctools/pageindex_ctl.py <command> [args]`
+- **分散配置の原則**: 生成された `.pageindex.json` は常に対象ドキュメントと同じディレクトリに保存される。
+- **Gemini API / Vertex AI 連携**: `build` コマンドはサマリー生成時に GCP Gemini API または Vertex AI を使用し、トークン統計をログ出力する。
+
+#### 個別インターフェース設計
+
+##### コマンド: `build`
+- **処理概要**: 物理構造抽出 ➔ Gemini API / Vertex AI 要約生成 ➔ バリデーション ➔ 分散保存。
+- **リトライポリシー**: JSON バリデーションに失敗した場合、AI（Gemini API / Vertex AI）への再生成依頼を **最大 2 回** まで実行する。
+
+###### 構築シーケンス
+
+```mermaid
+sequenceDiagram
+    participant User as ユーザー
+    participant CLI as pageindex_ctl (CLI)
+    participant Svc as Doc Service (PDF/PPTX/XLSX)
+    participant Gemini as GCP Gemini API / Vertex AI
+    participant Util as Util Service (Validation)
+    participant FS as File System
+    
+    User->>CLI: build <target_path> --recursive --ext ".pdf"
+    CLI->>FS: ファイル走査 (拡張子フィルタ適用)
+    loop 各対象ファイルについて
+        CLI->>Svc: 構造抽出依頼 (extract_structure)
+        Svc->>FS: ファイル読み込み
+        Svc-->>CLI: 物理構造 + サンプリングテキスト
+        
+        CLI->>Gemini: 構造データ + 黄金プロンプト
+        Gemini-->>CLI: サマリー JSON + メタデータ (Tokens/Quota)
+        
+        Note over CLI: トークン消費・クォータ情報をログ記録
+        
+        CLI->>Util: JSON バリデーション依頼
+        Util->>Util: Schema チェック (PAGEINDEX_SCHEMA)
+        alt バリデーション成功
+            Util-->>CLI: OK
+            CLI->>FS: {file_path}.pageindex.json として保存
+        else バリデーション失敗
+            Util-->>CLI: NG (Error Details)
+            Note over CLI: エラー内容を標準出力・ログに記録
+        end
+    end
+    CLI-->>User: 構築完了通知 (成功/失敗件数、総トークン数)
+```
+
+##### コマンド: `export`
+- **入力**: `target_dir` (必須) - 走査対象ディレクトリ。
+- **処理概要**: 指定ディレクトリ配下の全インデックス（`.pageindex.json`）から `filepath, title, summary` を抽出し `pageindex_summary.csv` を生成。
+- **出力**: 成功時、生成された CSV ファイルの絶対パスを標準出力に表示する。
+
 
 ## コンポーネント
 
@@ -929,8 +1162,9 @@ classDiagram
 | `text_convert_encoding` | `input_path`, `output_enc`, ... | `text_service` を呼び出して文字コード変換を実行する。 | `str` (JSON) |
 | `text_read_head` | `path`, `n_lines` | `text_service` を呼び出して先頭行抽出を実行する。 | `str` (JSON) |
 | `text_read_tail` | `path`, `n_lines` | `text_service` を呼び出して末尾行抽出を実行する。 | `str` (JSON) |
-| `text_grep` | `path`, `pattern` | `text_service` を呼び出して検索を実行する。 | `str` (JSON) |
+| `text_grep` | `path`, `pattern`, `encoding` | `text_service` を呼び出してGrep検索を実行する。 | `str` (JSON) |
 | `text_get_metadata` | `path` | `text_service` を呼び出してメタデータ取得を実行する。 | `str` (JSON) |
+| `text_copy_clipboard` | `text` | `text_service` を呼び出してテキストコピーを実行する。 | `str` (JSON) |
 | `zip_files` | `file_paths`, `output_path` | `util_service` を呼び出してZIP圧縮を実行する。 | `str` (JSON) |
 | `unzip_file` | `zip_path`, `output_dir` | `util_service` を呼び出してZIP解凍を実行する。 | `str` (JSON) |
 | `image_get_metadata` | `path` | `image_service` を呼び出してサイズ取得を実行する。 | `str` (JSON) |
@@ -997,6 +1231,7 @@ classDiagram
 | `read_tail` | `path`, `n_lines`, `encoding` | 末尾から指定行数を読み込む。 | `dict`: 行リスト |
 | `grep_file` | `path`, `pattern`, `encoding` | 正規表現検索を行う。 | `dict`: マッチリスト |
 | `get_metadata` | `path` | エンコーディング、サイズ、行数を取得する。 | `dict`: メタ情報 |
+| `set_clipboard_text` | `text` | テキストをクリップボードにコピーする。 | `dict`: 実行結果 |
 
 *   **src/doctools/util_service.py**
     *   **責務**: 汎用的なユーティリティ機能（ZIP圧縮・解凍等）を担当。
@@ -1053,7 +1288,38 @@ classDiagram
 - `created_at`: string (ISO8601日時)
 - `updated_at`: string (ISO8601日時)
 
+### PageIndex JSON スキーマ (PAGEINDEX_SCHEMA)
+AI が理解しやすいツリー構造を定義する。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "title": {"type": "string"},
+    "node_id": {"type": "string"},
+    "summary": {"type": "string"},
+    "start_index": {"type": "integer"},
+    "end_index": {"type": "integer"},
+    "sheet_name": {"type": "string"},
+    "nodes": { "type": "array", "items": { "$ref": "#" } }
+  },
+  "required": ["title", "node_id", "summary"]
+}
+```
+
 ## エラーハンドリング
 - Service Layer で発生した例外を捕捉し、呼び出し元（MCP Layer）に扱いやすい形式（例外またはエラー辞書）で返す。
 - Interface Layer で環境変数の未設定エラーなどを捕捉し、エラー辞書としてクライアントに返す。
+- **標準エラーレスポンス構造**:
+  AI エージェントがエラーを一貫して処理できるように、エラー発生時は以下の構造を持つ JSON 文字列を返却する。
+  ```json
+  {
+    "status": "error",
+    "detail": "エラーの詳細な説明文（例外メッセージなど）",
+    "type": "FileNotFoundError | ValueError | RuntimeError | ..."
+  }
+  ```
+  - `status`: 常に "error" となる。
+  - `detail`: ユーザーや AI が理解できる具体的なメッセージ。
+  - `type`: 例外のクラス名（例: `ValueError`）。AI がエラーの性質を判断するために使用する。
 

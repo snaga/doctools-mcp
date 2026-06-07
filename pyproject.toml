@@ -15,7 +15,10 @@ dependencies = [
     "Whoosh>=2.7.4",
     "charset-normalizer>=3.3.0",
     "pymupdf>=1.23.0",
-    "pywin32>=306; sys_platform == 'win32'"
+    "pywin32>=306; sys_platform == 'win32'",
+    "jsonschema>=4.20.0",
+    "google-generativeai>=0.3.0",
+    "google-cloud-aiplatform>=1.36.0"
 ]
 
 
@@ -29,6 +32,7 @@ dev = [
 [project.scripts]
 doctools-mcp = "doctools.main:main"
 index_ctl = "doctools.index_ctl:main"
+pageindex_ctl = "doctools.pageindex_ctl:main"
 
 [build-system]
 requires = ["setuptools", "wheel"]
@@ -40,3 +44,4 @@ exclude = ["tests*", "SPECS*"]
 
 [tool.pytest.ini_options]
 pythonpath = "src"
+python_files = ["test_*.py", "integration_test_*.py"]

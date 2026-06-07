@@ -4,6 +4,7 @@ import json
 from whoosh.index import open_dir, exists_in
 from whoosh.qparser import QueryParser
 from whoosh.query import Prefix
+from doctools.util_service import format_error_response
 
 # Base directory environment variable for multi-index support
 BASE_DIR_ENV_VAR = "WHOOSH_INDEX_BASE_DIR"
@@ -40,7 +41,7 @@ def list_indexes(base_dir: str) -> dict:
         dict: List of indexes with 'name' and 'description'.
     """
     if not base_dir or not os.path.exists(base_dir):
-        return {"status": "error", "detail": f"Base directory not found or not set: {base_dir}"}
+        return format_error_response(ValueError(f"Base directory not found or not set: {base_dir}"))
     
     indexes = []
     try:
@@ -79,7 +80,7 @@ def list_indexes(base_dir: str) -> dict:
         return {"status": "success", "indexes": indexes}
         
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)
 
 def search_index(query_str: str = "", filter_dir: str = None, 
                  base_dir: str = None, index_name: str = None) -> dict:
@@ -97,7 +98,7 @@ def search_index(query_str: str = "", filter_dir: str = None,
         dict: Result containing hits (path, filename, content summary, and score).
     """
     if not base_dir:
-        return {"status": "error", "detail": f"Environment variable {BASE_DIR_ENV_VAR} is not set."}
+        return format_error_response(ValueError(f"Environment variable {BASE_DIR_ENV_VAR} is not set."))
 
     # Fallback to "default" if index_name is not provided
     target_index_name = index_name if index_name else "default"
@@ -105,15 +106,14 @@ def search_index(query_str: str = "", filter_dir: str = None,
     try:
         target_index_path = resolve_index_path(base_dir, target_index_name)
     except ValueError as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)
 
     # Strict existence check
     if not os.path.exists(target_index_path) or not exists_in(target_index_path):
-        return {
-            "status": "error", 
-            "detail": f"Valid Whoosh index not found at: {target_index_path}. "
-                      f"Please ensure the index exists and is initialized."
-        }
+        return format_error_response(FileNotFoundError(
+            f"Valid Whoosh index not found at: {target_index_path}. "
+            f"Please ensure the index exists and is initialized."
+        ))
         
     try:
         ix = open_dir(target_index_path)
@@ -157,4 +157,4 @@ def search_index(query_str: str = "", filter_dir: str = None,
         }
         
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)

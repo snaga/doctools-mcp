@@ -4,6 +4,7 @@ import io
 import os
 import win32com.client
 from doctools.pdf_service import export_pages_to_images as pdf_to_images
+from doctools.util_service import format_error_response
 
 def list_sheets(input_path: str) -> dict:
     """
@@ -27,7 +28,7 @@ def list_sheets(input_path: str) -> dict:
         }
         
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)
     finally:
         if workbook:
             workbook.close()
@@ -94,7 +95,7 @@ def extract_csv(input_path: str, output_dir: str = None, sheet_names: list[str] 
         }
         
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)
     finally:
         if workbook:
             workbook.close()
@@ -160,7 +161,7 @@ def extract_markdown_to_file(input_path: str, output_path: str = None, sheet_nam
         }
         
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)
     finally:
         if workbook:
             workbook.close()
@@ -200,7 +201,7 @@ def extract_sheet(input_path: str, output_path: str, sheet_name: str) -> dict:
         }
         
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)
     finally:
         if workbook:
             workbook.close()
@@ -302,7 +303,7 @@ def export_sheets_to_images(
         }
 
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)
     finally:
         if workbook:
             try:
@@ -322,3 +323,103 @@ def export_sheets_to_images(
                     os.remove(pdf_path)
                 except Exception:
                     pass
+
+def extract_structure(input_path: str) -> dict:
+    """
+    Extract the physical structure of an Excel file for PageIndex.
+    Iterates through all sheets and samples the first few rows.
+
+    Args:
+        input_path (str): Path to the XLSX file.
+
+    Returns:
+        dict: Result containing the structure list.
+            Each element: {"level": int, "title": str, "page": int, "sample_text": str}
+    """
+    workbook = None
+    try:
+        if not os.path.exists(input_path):
+            raise FileNotFoundError(f"Input file not found: {input_path}")
+            
+        workbook = openpyxl.load_workbook(input_path, read_only=True, data_only=True)
+        structure = []
+        
+        for sheet_name in workbook.sheetnames:
+            sheet = workbook[sheet_name]
+            
+            # Sample first 10 rows
+            rows_data = []
+            for row in sheet.iter_rows(min_row=1, max_row=10, values_only=True):
+                # Only include non-empty values
+                row_str = " ".join([str(cell).strip() for cell in row if cell is not None])
+                if row_str:
+                    rows_data.append(row_str)
+            
+            sample = " | ".join(rows_data)[:500].strip()
+            
+            structure.append({
+                "level": 1,
+                "title": sheet_name,
+                "page": 0, # Sheet-based, not page-based
+                "sample_text": sample
+            })
+            
+        return {
+            "status": "success",
+            "structure": structure
+        }
+    except Exception as e:
+        return format_error_response(e)
+    finally:
+        if workbook:
+            workbook.close()
+
+def extract_node_content(input_path: str, sheet_name: str = None) -> dict:
+    """
+    Extract text content from a specified sheet of an Excel file.
+
+    Args:
+        input_path (str): Path to the XLSX file.
+        sheet_name (str, optional): Name of the sheet.
+            If None, all sheets are extracted.
+
+    Returns:
+        dict: Result containing the extracted text content.
+    """
+    workbook = None
+    try:
+        if not os.path.exists(input_path):
+            raise FileNotFoundError(f"Input file not found: {input_path}")
+            
+        workbook = openpyxl.load_workbook(input_path, read_only=True, data_only=True)
+        
+        if sheet_name is None:
+            target_sheets = workbook.sheetnames
+        else:
+            if sheet_name not in workbook.sheetnames:
+                raise ValueError(f"Sheet '{sheet_name}' not found.")
+            target_sheets = [sheet_name]
+            
+        all_content = []
+        for s_name in target_sheets:
+            sheet = workbook[s_name]
+            sheet_lines = [f"--- Sheet: {s_name} ---"]
+            
+            for row in sheet.iter_rows(values_only=True):
+                # Format row as a pipe-separated string
+                row_str = " | ".join([str(cell).replace("\n", " ").strip() if cell is not None else "" for cell in row])
+                if row_str.strip().replace("|", "").strip(): # Only add non-empty rows
+                    sheet_lines.append(row_str)
+            
+            all_content.append("\n".join(sheet_lines))
+            
+        return {
+            "status": "success",
+            "content": "\n\n".join(all_content)
+        }
+        
+    except Exception as e:
+        return format_error_response(e)
+    finally:
+        if workbook:
+            workbook.close()

@@ -1,6 +1,11 @@
 from pypdf import PdfReader, PdfWriter
 import os
 import fitz  # PyMuPDF
+import time
+import logging
+from doctools.util_service import format_error_response
+
+logger = logging.getLogger(__name__)
 
 def export_pages_to_images(
     input_path: str,
@@ -73,7 +78,7 @@ def export_pages_to_images(
         }
 
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)
 
 def extract_pages(input_path: str, output_path: str, start_page: int, end_page: int) -> dict:
     """
@@ -119,7 +124,7 @@ def extract_pages(input_path: str, output_path: str, start_page: int, end_page: 
         }
         
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)
 
 def extract_text_as_markdown(input_path: str, output_path: str = None, start_page: int = 1, end_page: int = None) -> dict:
     """
@@ -174,7 +179,7 @@ def extract_text_as_markdown(input_path: str, output_path: str = None, start_pag
         }
 
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)
 
 def get_page_count(input_path: str) -> dict:
     """
@@ -197,4 +202,128 @@ def get_page_count(input_path: str) -> dict:
         }
         
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)
+
+def extract_structure(input_path: str) -> dict:
+    """
+    Extract the physical structure of a PDF file for PageIndex.
+    Uses TOC if available, otherwise falls back to page-by-page sampling.
+
+    Args:
+        input_path (str): Path to the PDF file.
+
+    Returns:
+        dict: Result containing the structure list.
+            Each element: {"level": int, "title": str, "page": int, "sample_text": str}
+    """
+    try:
+        if not os.path.exists(input_path):
+            raise FileNotFoundError(f"Input file not found: {input_path}")
+
+        doc = fitz.open(input_path)
+        toc = doc.get_toc()
+        total_pages = len(doc)
+        
+        structure = []
+        last_log_time = time.time()
+        
+        if toc:
+            total_items = len(toc)
+            for i, (lvl, title, page) in enumerate(toc):
+                # 5秒おきに進捗をログ出力
+                current_time = time.time()
+                if current_time - last_log_time > 5:
+                    logger.info(f"📊 PDF structure extraction progress: {i+1}/{total_items} TOC items processed.")
+                    last_log_time = current_time
+
+                # Get some sample text from the start of the page
+                try:
+                    if 1 <= page <= total_pages:
+                        p = doc.load_page(page - 1)
+                        text = p.get_text()
+                        sample = text[:300].replace("\n", " ").strip()
+                    else:
+                        sample = ""
+                except Exception:
+                    sample = ""
+                    
+                structure.append({
+                    "level": lvl,
+                    "title": title,
+                    "page": page,
+                    "sample_text": sample
+                })
+        else:
+            # Fallback: Treat each page as a section
+            for i in range(total_pages):
+                # 5秒おきに進捗をログ出力
+                current_time = time.time()
+                if current_time - last_log_time > 5:
+                    logger.info(f"📊 PDF structure extraction progress: {i+1}/{total_pages} pages processed.")
+                    last_log_time = current_time
+
+                page = doc.load_page(i)
+                text = page.get_text()
+                # Use first line or first 50 chars as title if possible
+                lines = [line.strip() for line in text.split('\n') if line.strip()]
+                title = lines[0][:100] if lines else f"Page {i+1}"
+                sample = text[:300].replace("\n", " ").strip()
+                
+                structure.append({
+                    "level": 1,
+                    "title": title,
+                    "page": i + 1,
+                    "sample_text": sample
+                })
+        
+        doc.close()
+        return {
+            "status": "success",
+            "structure": structure
+        }
+    except Exception as e:
+        return format_error_response(e)
+
+def extract_node_content(input_path: str, pages: list[int] = None) -> dict:
+    """
+    Extract text content from specified pages of a PDF file.
+
+    Args:
+        input_path (str): Path to the PDF file.
+        pages (list[int], optional): List of 1-based page numbers.
+            If None, all pages are extracted.
+
+    Returns:
+        dict: Result containing the extracted text content.
+    """
+    try:
+        if not os.path.exists(input_path):
+            raise FileNotFoundError(f"Input file not found: {input_path}")
+            
+        reader = PdfReader(input_path)
+        total_pages = len(reader.pages)
+        
+        if pages is None:
+            target_pages = list(range(1, total_pages + 1))
+        else:
+            target_pages = pages
+            
+        extracted_text = []
+        for p_num in target_pages:
+            if 1 <= p_num <= total_pages:
+                page = reader.pages[p_num - 1]
+                text = page.extract_text()
+                if text:
+                    extracted_text.append(text)
+                else:
+                    extracted_text.append(f"(No text extracted from Page {p_num})")
+            else:
+                extracted_text.append(f"(Page {p_num} out of range)")
+        
+        return {
+            "status": "success",
+            "content": "\n\n".join(extracted_text)
+        }
+
+    except Exception as e:
+        return format_error_response(e)

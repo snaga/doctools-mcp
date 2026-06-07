@@ -2,6 +2,7 @@ from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 import os
 import win32com.client
+from doctools.util_service import format_error_response
 
 def count_slides(input_path: str) -> dict:
     """
@@ -24,7 +25,7 @@ def count_slides(input_path: str) -> dict:
         }
         
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)
 
 def extract_text_as_markdown(input_path: str, output_path: str = None, start_slide: int = 1, end_slide: int = None) -> dict:
     """
@@ -133,7 +134,7 @@ def extract_text_as_markdown(input_path: str, output_path: str = None, start_sli
             "output_path": os.path.abspath(output_path)
         }
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)
 
 def extract_slides(input_path: str, output_path: str, start_slide: int, end_slide: int) -> dict:
     """
@@ -193,7 +194,7 @@ def extract_slides(input_path: str, output_path: str, start_slide: int, end_slid
         }
         
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)
 
 def export_slides_to_images(
     input_path: str,
@@ -262,7 +263,7 @@ def export_slides_to_images(
         }
         
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)
     finally:
         if presentation:
             try:
@@ -323,7 +324,7 @@ def merge_pptx(input_paths: list[str], output_path: str) -> dict:
         }
         
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return format_error_response(e)
     finally:
         if base_presentation:
             try:
@@ -335,3 +336,112 @@ def merge_pptx(input_paths: list[str], output_path: str) -> dict:
                 powerpoint.Quit()
             except:
                 pass
+
+def extract_structure(input_path: str) -> dict:
+    """
+    Extract the physical structure of a PowerPoint file for PageIndex.
+    Iterates through all slides and extracts titles and sample text.
+
+    Args:
+        input_path (str): Path to the PPTX file.
+
+    Returns:
+        dict: Result containing the structure list.
+            Each element: {"level": int, "title": str, "page": int, "sample_text": str}
+    """
+    try:
+        if not os.path.exists(input_path):
+            raise FileNotFoundError(f"Input file not found: {input_path}")
+            
+        prs = Presentation(input_path)
+        structure = []
+        
+        for i, slide in enumerate(prs.slides):
+            # Title
+            title_shape = getattr(slide.shapes, "title", None)
+            title = title_shape.text.strip() if title_shape and title_shape.text else f"Slide {i+1}"
+            
+            # Sample text (non-title shapes)
+            slide_text = []
+            for shape in slide.shapes:
+                if shape == title_shape:
+                    continue
+                if getattr(shape, "has_text_frame", False):
+                    for paragraph in shape.text_frame.paragraphs:
+                        if paragraph.text.strip():
+                            slide_text.append(paragraph.text.strip())
+            
+            sample = " ".join(slide_text)[:300].strip()
+            
+            structure.append({
+                "level": 1,
+                "title": title,
+                "page": i + 1,
+                "sample_text": sample
+            })
+            
+        return {
+            "status": "success",
+            "structure": structure
+        }
+    except Exception as e:
+        return format_error_response(e)
+
+def extract_node_content(input_path: str, slides: list[int] = None) -> dict:
+    """
+    Extract text content from specified slides of a PowerPoint file.
+
+    Args:
+        input_path (str): Path to the PPTX file.
+        slides (list[int], optional): List of 1-based slide numbers.
+            If None, all slides are extracted.
+
+    Returns:
+        dict: Result containing the extracted text content.
+    """
+    try:
+        if not os.path.exists(input_path):
+            raise FileNotFoundError(f"Input file not found: {input_path}")
+            
+        prs = Presentation(input_path)
+        total_slides = len(prs.slides)
+        
+        if slides is None:
+            target_slides = list(range(1, total_slides + 1))
+        else:
+            target_slides = slides
+            
+        extracted_text = []
+        for s_num in target_slides:
+            if 1 <= s_num <= total_slides:
+                slide = prs.slides[s_num - 1]
+                slide_content = []
+                
+                # Title
+                title_shape = getattr(slide.shapes, "title", None)
+                if title_shape and getattr(title_shape, "text", None):
+                    slide_content.append(title_shape.text)
+                
+                # Content
+                for shape in slide.shapes:
+                    if shape == title_shape:
+                        continue
+                    if getattr(shape, "has_text_frame", False):
+                        for paragraph in shape.text_frame.paragraphs:
+                            if paragraph.text.strip():
+                                slide_content.append(paragraph.text)
+                    elif getattr(shape, "has_table", False):
+                        for row in shape.table.rows:
+                            row_cells = [cell.text_frame.text.replace("\n", " ").strip() for cell in row.cells]
+                            slide_content.append(" | ".join(row_cells))
+                
+                extracted_text.append(f"--- Slide {s_num} ---\n" + "\n".join(slide_content))
+            else:
+                extracted_text.append(f"--- Slide {s_num} (Out of range) ---")
+        
+        return {
+            "status": "success",
+            "content": "\n\n".join(extracted_text)
+        }
+    except Exception as e:
+        return format_error_response(e)

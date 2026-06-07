@@ -40,14 +40,19 @@ from doctools.image_service import (
     crop_image as image_crop_svc,
     save_clipboard_image as image_save_clipboard_svc
 )
+from doctools.pageindex_service import (
+    get_tree as pageindex_get_tree_svc,
+    get_node_content as pageindex_get_node_content_svc
+)
 from doctools.text_service import (
     convert_file_encoding as convert_encoding_svc, 
     read_head as read_head_svc, 
     read_tail as read_tail_svc, 
     grep_file as grep_file_svc,
-    get_metadata as get_metadata_svc
+    get_metadata as get_metadata_svc,
+    set_clipboard_text as set_clipboard_text_svc
 )
-from doctools.util_service import zip_files as zip_files_svc, unzip_file as unzip_file_svc
+from doctools.util_service import zip_files as zip_files_svc, unzip_file as unzip_file_svc, format_error_response
 from doctools.search_service import search_index, list_indexes as list_indexes_svc, BASE_DIR_ENV_VAR
 
 mcp = FastMCP("doctools-mcp")
@@ -72,10 +77,17 @@ def list_indexes() -> str:
     Example:
         Output: {"status": "success", "indexes": [{"name": "project_a", "description": "Docs for Project A"}, ...]}
     """
-    base_dir = os.getenv(BASE_DIR_ENV_VAR)
-    if not base_dir:
-        return to_json({"status": "error", "detail": f"{BASE_DIR_ENV_VAR} environment variable is not set."})
-    return to_json(list_indexes_svc(base_dir))
+    try:
+        base_dir = os.getenv(BASE_DIR_ENV_VAR)
+        if not base_dir:
+            return to_json({
+                "status": "error", 
+                "detail": f"{BASE_DIR_ENV_VAR} environment variable is not set.",
+                "type": "EnvironmentError"
+            })
+        return to_json(list_indexes_svc(base_dir))
+    except Exception as e:
+        return to_json(format_error_response(e))
 
 @mcp.tool
 def search_documents(query: str, directory: str = None, index_name: str = None) -> str:
@@ -104,14 +116,67 @@ def search_documents(query: str, directory: str = None, index_name: str = None) 
                     Searches within `{WHOOSH_INDEX_BASE_DIR}/{index_name}`.
                     If omitted, defaults to "default".
     """
-    base_dir = os.getenv(BASE_DIR_ENV_VAR)
+    try:
+        base_dir = os.getenv(BASE_DIR_ENV_VAR)
+        
+        return to_json(search_index(
+            query_str=query, 
+            filter_dir=directory,
+            base_dir=base_dir,
+            index_name=index_name
+        ))
+    except Exception as e:
+        return to_json(format_error_response(e))
+
+# --- PageIndex Tools ---
+
+@mcp.tool
+def pageindex_get_tree(input_path: str, node_id: str = None, depth: int = 2) -> str:
+    """
+    PageIndex JSON を読み込み、ドキュメントの目次（ツリー構造）を返却します。
     
-    return to_json(search_index(
-        query_str=query, 
-        filter_dir=directory,
-        base_dir=base_dir,
-        index_name=index_name
-    ))
+    大規模なドキュメントの構造を段階的に探索するのに適しています。
+    最初は node_id 未指定でルートから取得し、必要に応じて特定の node_id を指定して深掘りしてください。
+    
+    Args:
+        input_path: 対象ドキュメントのパス（例: 'path/to/doc.pdf'）。
+                    '.pageindex.json' が同じ場所に存在する必要があります。
+        node_id: 取得を開始する特定のノードID（任意）。
+        depth: 取得する階層の深さ（デフォルト: 2）。
+        
+    Example:
+        1. まず全体像を把握: pageindex_get_tree(path)
+        2. 第3章の詳細が見たい: pageindex_get_tree(path, node_id='ch_3', depth=1)
+    """
+    return to_json(pageindex_get_tree_svc(input_path, node_id, depth))
+
+@mcp.tool
+def pageindex_get_node_content(
+    file_path: str,
+    node_type: str,
+    node_id: str = None,
+    pages: list[int] = None,
+    sheet_name: str = None
+) -> str:
+    """
+    ドキュメントの指定された箇所（ノード、ページ範囲、またはシート）からフルテキストを抽出します。
+    
+    優先順位:
+    1. node_id が指定されている場合、PageIndex から該当箇所の範囲（ページ等）を特定して抽出します。
+    2. node_id が無い場合、pages (PDF/PPTX) または sheet_name (Excel) を直接使用します。
+    
+    Args:
+        file_path: 対象ドキュメントのパス。
+        node_type: ドキュメントの種類 ('pdf', 'pptx', 'xlsx')。
+        node_id: PageIndex 内のノードID（任意）。指定すると pages/sheet_name は無視されます。
+        pages: 抽出したいページ番号またはスライド番号のリスト (1-based, 任意)。
+        sheet_name: 抽出したい Excel のシート名（任意）。
+        
+    Example:
+        - ノードIDで抽出: pageindex_get_node_content(path, 'pdf', node_id='sec_2_1')
+        - 直接ページ指定: pageindex_get_node_content(path, 'pdf', pages=[1, 2, 5])
+    """
+    return to_json(pageindex_get_node_content_svc(file_path, node_type, node_id, pages, sheet_name))
 
 # --- PDF Tools ---
 
@@ -221,9 +286,9 @@ def pptx_merge(input_paths: list[str], output_path: str) -> str:
         output_path: The absolute path where the merged PPTX file will be saved.
     """
     if not isinstance(input_paths, list):
-        return to_json({"status": "error", "detail": "input_paths must be a list."})
+        return to_json(format_error_response(TypeError("input_paths must be a list.")))
     if not input_paths:
-        return to_json({"status": "error", "detail": "input_paths list cannot be empty."})
+        return to_json(format_error_response(ValueError("input_paths list cannot be empty.")))
         
     return to_json(pptx_merge_svc(input_paths, output_path))
 
@@ -499,6 +564,26 @@ def text_convert_encoding(input_path: str, output_encoding: str, output_path: st
     """
     res = convert_encoding_svc(input_path, output_encoding, output_path, input_encoding)
     return to_json(res)
+
+@mcp.tool
+def text_copy_clipboard(text: str) -> str:
+    """
+    Copy the specified text to the Windows clipboard.
+    
+    This tool is useful for quickly copying generated content, paths, or extracted text 
+    to the system clipboard for use in other applications.
+    
+    Args:
+        text: The text string to be copied to the clipboard.
+        
+    Returns:
+        JSON string containing the status and a success message.
+        
+    Example:
+        Input: text="Hello from MCP!"
+        Output: {"status": "success", "message": "Text copied to clipboard successfully."}
+    """
+    return to_json(set_clipboard_text_svc(text))
 
 # --- Utility Tools ---
 
