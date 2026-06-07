@@ -1,14 +1,6 @@
 import os
 import zipfile
 
-def format_error_response(e: Exception) -> dict:
-    """Formats an exception into a standardized error response dictionary."""
-    return {
-        "status": "error",
-        "detail": str(e),
-        "type": type(e).__name__
-    }
-
 def zip_files(file_paths: list[str], output_path: str = None) -> dict:
     """
     Compress multiple files and directories into a single ZIP archive.
@@ -18,12 +10,12 @@ def zip_files(file_paths: list[str], output_path: str = None) -> dict:
         output_path: Path for the output ZIP file (optional).
     """
     if not file_paths:
-        return format_error_response(ValueError("No files specified for compression."))
+        return {"status": "error", "detail": "No files specified for compression."}
         
     # Validate input paths
     missing_paths = [p for p in file_paths if not os.path.exists(p)]
     if missing_paths:
-        return format_error_response(FileNotFoundError(f"Paths not found: {missing_paths}"))
+        return {"status": "error", "detail": f"Paths not found: {missing_paths}"}
         
     try:
         # Generate default output path if not provided
@@ -60,7 +52,7 @@ def zip_files(file_paths: list[str], output_path: str = None) -> dict:
             "output_path": abs_output_path
         }
     except Exception as e:
-        return format_error_response(e)
+        return {"status": "error", "detail": str(e)}
 
 def unzip_file(zip_path: str, output_dir: str = None) -> dict:
     """
@@ -71,7 +63,7 @@ def unzip_file(zip_path: str, output_dir: str = None) -> dict:
         output_dir: Directory to extract files to (optional).
     """
     if not os.path.exists(zip_path):
-        return format_error_response(FileNotFoundError(f"ZIP file not found: {zip_path}"))
+        return {"status": "error", "detail": f"ZIP file not found: {zip_path}"}
         
     try:
         # Generate default output directory if not provided
@@ -94,6 +86,6 @@ def unzip_file(zip_path: str, output_dir: str = None) -> dict:
             "extracted_files": extracted_files
         }
     except zipfile.BadZipFile:
-        return format_error_response(zipfile.BadZipFile("Invalid or corrupted ZIP file."))
+        return {"status": "error", "detail": "Invalid or corrupted ZIP file."}
     except Exception as e:
-        return format_error_response(e)
+        return {"status": "error", "detail": str(e)}

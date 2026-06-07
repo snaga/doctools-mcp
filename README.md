@@ -29,7 +29,6 @@ Gemini-CLI 等の AI エージェントが、PDF, PowerPoint, Excel, CSV, HTML �
 - `pptx_extract_images`: スライドを画像 (PNG/JPG) として保存します。システム構成図やグラフの理解に強力な力を発揮します。
 - `pptx_count_slides`: 総スライド数を取得します。
 - `pptx_extract_slides`: 指定範囲のスライドを別ファイルとして保存します。
-- `pptx_merge`: 複数の PowerPoint ファイルを、元のレイアウトやマスターを維持したまま 1 つに結合します（Windows 環境）。
 
 #### Excel ツール
 - `xlsx_list_sheets`: 全てのシート名を取得します。
@@ -50,7 +49,6 @@ Gemini-CLI 等の AI エージェントが、PDF, PowerPoint, Excel, CSV, HTML �
 - `text_grep`: 正規表現を使用してテキストファイル内を検索します。
 - `text_get_metadata`: テキストファイルのエンコーディング（自動判定）、サイズ、行数を取得します。
 - `text_convert_encoding`: ファイルの文字コードを変換します (Shift-JIS -> UTF-8 等)。
-- `text_copy_clipboard`: 指定されたテキストを Windows のクリップボードにコピーします。AI が生成した回答や抽出したパスをサクッと利用するのに便利です。
 
 #### HTML ツール
 - `html_extract_markdown`: HTML からテキストを抽出し、Markdown ファイルとして保存します。

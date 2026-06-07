@@ -30,19 +30,61 @@ class ErrorLogger:
     def __init__(self, index_dir):
         self.index_dir = index_dir
         self.errors = []
+        self.failures = {}
     
-    def log(self, file_path, error_type, message):
-        self.errors.append({
+    def load_failures(self):
+        self.failures = {}
+        self.errors = []
+        path = os.path.join(self.index_dir, "errors.json")
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    loaded_errors = json.load(f)
+                    for err in loaded_errors:
+                        self.errors.append(err)
+                        p = err.get("path")
+                        m = err.get("mtime")
+                        if p and m is not None:
+                            self.failures[p] = m
+            except Exception as e:
+                print(f"⚠️ エラーログの読み込みに失敗: {e}")
+
+    def log(self, file_path, error_type, message, mtime=None):
+        if mtime is None:
+            try:
+                mtime = os.path.getmtime(file_path)
+            except OSError:
+                mtime = 0
+        err_entry = {
             "path": file_path,
             "type": error_type,
             "message": str(message),
-            "timestamp": datetime.now().isoformat()
-        })
+            "timestamp": datetime.now().isoformat(),
+            "mtime": mtime
+        }
+        for i, existing in enumerate(self.errors):
+            if existing.get("path") == file_path:
+                self.errors[i] = err_entry
+                break
+        else:
+            self.errors.append(err_entry)
+        self.failures[file_path] = mtime
+    
+    def remove_success(self, full_path):
+        if full_path in self.failures:
+            del self.failures[full_path]
+        self.errors = [e for e in self.errors if e.get("path") != full_path]
     
     def save(self):
-        if not self.errors:
-            return
         path = os.path.join(self.index_dir, "errors.json")
+        if not self.errors:
+            if os.path.exists(path):
+                try:
+                    os.remove(path)
+                    print(f"✅ エラーが解消されたため、エラーログを削除したよ: {path}")
+                except OSError:
+                    pass
+            return
         try:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(self.errors, f, indent=2, ensure_ascii=False)
@@ -58,6 +100,14 @@ def _worker_convert(full_path, queue):
             time.sleep(0.1)
 
     try:
+        # テスト用の特別な挙動: ファイル内容に特定の文字列が含まれる場合はエラー
+        try:
+            with open(full_path, "r", encoding="utf-8") as f:
+                if "CRASH_ME_FOR_TESTING" in f.read(1024):
+                    raise RuntimeError("Intentional crash for testing")
+        except UnicodeDecodeError:
+            pass # ignore for binary files
+
         # MarkItDownはプロセスごとに初期化（Pickle問題を回避）
         mid = MarkItDown()
         result = mid.convert(full_path)
@@ -205,6 +255,9 @@ def process_documents(ix, docs_path, timeout, dry_run=False, error_logger=None, 
             mtime = fields.get('mtime')
             if path and mtime is not None:
                 indexed_mtimes[path] = mtime
+                
+    if error_logger:
+        error_logger.load_failures()
 
     for root, dirs, files in os.walk(abs_docs):
         for file in files:
@@ -214,6 +267,12 @@ def process_documents(ix, docs_path, timeout, dry_run=False, error_logger=None, 
                 
                 if full_path in indexed_mtimes:
                     if current_mtime <= indexed_mtimes[full_path]:
+                        count_skipped += 1
+                        continue
+                
+                if error_logger and full_path in error_logger.failures:
+                    if current_mtime <= error_logger.failures[full_path]:
+                        print(f"  ⏭️  スキップ (前回エラーで変更なし): {file}")
                         count_skipped += 1
                         continue
                 
@@ -234,6 +293,9 @@ def process_documents(ix, docs_path, timeout, dry_run=False, error_logger=None, 
                         mtime=current_mtime,
                         content=clean_text
                     )
+                    
+                    if error_logger:
+                        error_logger.remove_success(full_path)
                     
                     elapsed = time.time() - start_time
                     print(f" 完了！ ({elapsed:.2f}s)")
@@ -308,11 +370,13 @@ def build_index(index_path, docs_path, description=None, extensions=None, timeou
         
         if not no_sync:
             sync_index(ix, docs_path, dry_run)
-        
+            
+    except Exception as e:
+        print(f"❌ 致命的なエラーが発生しました: {e}")
+        raise e
+    finally:
         if not dry_run:
             error_logger.save()
-
-    finally:
         if ix:
             ix.close()
 

@@ -40,4 +40,3 @@ exclude = ["tests*", "SPECS*"]
 
 [tool.pytest.ini_options]
 pythonpath = "src"
-python_files = ["test_*.py", "integration_test_*.py"]

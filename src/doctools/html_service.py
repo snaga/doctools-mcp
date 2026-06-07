@@ -1,6 +1,5 @@
 import os
 from markitdown import MarkItDown
-from doctools.util_service import format_error_response
 
 def extract_text_as_markdown(input_path: str, output_path: str = None) -> dict:
     """
@@ -32,4 +31,4 @@ def extract_text_as_markdown(input_path: str, output_path: str = None) -> dict:
         }
         
     except Exception as e:
-        return format_error_response(e)
+        return {"status": "error", "detail": str(e)}

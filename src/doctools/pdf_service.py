@@ -1,7 +1,6 @@
 from pypdf import PdfReader, PdfWriter
 import os
 import fitz  # PyMuPDF
-from doctools.util_service import format_error_response
 
 def export_pages_to_images(
     input_path: str,
@@ -74,7 +73,7 @@ def export_pages_to_images(
         }
 
     except Exception as e:
-        return format_error_response(e)
+        return {"status": "error", "detail": str(e)}
 
 def extract_pages(input_path: str, output_path: str, start_page: int, end_page: int) -> dict:
     """
@@ -120,7 +119,7 @@ def extract_pages(input_path: str, output_path: str, start_page: int, end_page: 
         }
         
     except Exception as e:
-        return format_error_response(e)
+        return {"status": "error", "detail": str(e)}
 
 def extract_text_as_markdown(input_path: str, output_path: str = None, start_page: int = 1, end_page: int = None) -> dict:
     """
@@ -175,7 +174,7 @@ def extract_text_as_markdown(input_path: str, output_path: str = None, start_pag
         }
 
     except Exception as e:
-        return format_error_response(e)
+        return {"status": "error", "detail": str(e)}
 
 def get_page_count(input_path: str) -> dict:
     """
@@ -198,4 +197,4 @@ def get_page_count(input_path: str) -> dict:
         }
         
     except Exception as e:
-        return format_error_response(e)
+        return {"status": "error", "detail": str(e)}

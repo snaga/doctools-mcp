@@ -2,31 +2,6 @@ import os
 import re
 from collections import deque
 from charset_normalizer import from_path
-import win32clipboard
-import win32con
-from doctools.util_service import format_error_response
-
-def set_clipboard_text(text: str) -> dict:
-    """
-    Copy the specified text to the Windows clipboard.
-    
-    Args:
-        text: The text to copy.
-    """
-    try:
-        win32clipboard.OpenClipboard()
-        try:
-            win32clipboard.EmptyClipboard()
-            win32clipboard.SetClipboardText(text, win32con.CF_UNICODETEXT)
-        finally:
-            win32clipboard.CloseClipboard()
-            
-        return {
-            "status": "success",
-            "message": "Text copied to clipboard successfully."
-        }
-    except Exception as e:
-        return format_error_response(e)
 
 def convert_file_encoding(input_path: str, output_encoding: str, output_path: str = None, input_encoding: str = "utf-8") -> dict:
     """
@@ -39,7 +14,7 @@ def convert_file_encoding(input_path: str, output_encoding: str, output_path: st
         input_encoding: Source encoding (optional, default 'utf-8').
     """
     if not os.path.exists(input_path):
-        return format_error_response(FileNotFoundError(f"File not found: {input_path}"))
+        return {"status": "error", "detail": f"File not found: {input_path}"}
         
     try:
         # 1. Detect input encoding ONLY if input_encoding is explicitly None
@@ -77,7 +52,7 @@ def convert_file_encoding(input_path: str, output_encoding: str, output_path: st
             "output_encoding": output_encoding
         }
     except Exception as e:
-        return format_error_response(e)
+        return {"status": "error", "detail": str(e)}
 
 def read_head(path: str, n_lines: int = 10, encoding: str = "utf-8") -> dict:
     """
@@ -89,7 +64,7 @@ def read_head(path: str, n_lines: int = 10, encoding: str = "utf-8") -> dict:
         encoding: File encoding (default 'utf-8').
     """
     if not os.path.exists(path):
-        return format_error_response(FileNotFoundError(f"File not found: {path}"))
+        return {"status": "error", "detail": f"File not found: {path}"}
         
     try:
         lines = []
@@ -100,7 +75,7 @@ def read_head(path: str, n_lines: int = 10, encoding: str = "utf-8") -> dict:
                 lines.append(line.rstrip("\r\n"))
         return {"status": "success", "lines": lines}
     except Exception as e:
-        return format_error_response(e)
+        return {"status": "error", "detail": str(e)}
 
 def read_tail(path: str, n_lines: int = 10, encoding: str = "utf-8") -> dict:
     """
@@ -112,7 +87,7 @@ def read_tail(path: str, n_lines: int = 10, encoding: str = "utf-8") -> dict:
         encoding: File encoding (default 'utf-8').
     """
     if not os.path.exists(path):
-        return format_error_response(FileNotFoundError(f"File not found: {path}"))
+        return {"status": "error", "detail": f"File not found: {path}"}
         
     try:
         # Use deque with maxlen to efficiently get the last n lines
@@ -120,7 +95,7 @@ def read_tail(path: str, n_lines: int = 10, encoding: str = "utf-8") -> dict:
             lines = deque(f, maxlen=n_lines)
         return {"status": "success", "lines": [line.rstrip("\r\n") for line in lines]}
     except Exception as e:
-        return format_error_response(e)
+        return {"status": "error", "detail": str(e)}
 
 def grep_file(path: str, pattern: str, encoding: str = "utf-8") -> dict:
     """
@@ -132,7 +107,7 @@ def grep_file(path: str, pattern: str, encoding: str = "utf-8") -> dict:
         encoding: File encoding (default 'utf-8').
     """
     if not os.path.exists(path):
-        return format_error_response(FileNotFoundError(f"File not found: {path}"))
+        return {"status": "error", "detail": f"File not found: {path}"}
         
     try:
         regex = re.compile(pattern)
@@ -143,7 +118,7 @@ def grep_file(path: str, pattern: str, encoding: str = "utf-8") -> dict:
                     matches.append({"line": i, "text": line.rstrip("\r\n")})
         return {"status": "success", "matches": matches}
     except Exception as e:
-        return format_error_response(e)
+        return {"status": "error", "detail": str(e)}
 
 def get_metadata(path: str) -> dict:
     """
@@ -153,7 +128,7 @@ def get_metadata(path: str) -> dict:
         path: Path to the file.
     """
     if not os.path.exists(path):
-        return format_error_response(FileNotFoundError(f"File not found: {path}"))
+        return {"status": "error", "detail": f"File not found: {path}"}
         
     try:
         # 1. Get file size
@@ -177,4 +152,4 @@ def get_metadata(path: str) -> dict:
             "lines": line_count
         }
     except Exception as e:
-        return format_error_response(e)
+        return {"status": "error", "detail": str(e)}

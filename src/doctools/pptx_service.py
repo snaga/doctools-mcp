@@ -2,7 +2,6 @@ from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 import os
 import win32com.client
-from doctools.util_service import format_error_response
 
 def count_slides(input_path: str) -> dict:
     """
@@ -25,7 +24,7 @@ def count_slides(input_path: str) -> dict:
         }
         
     except Exception as e:
-        return format_error_response(e)
+        return {"status": "error", "detail": str(e)}
 
 def extract_text_as_markdown(input_path: str, output_path: str = None, start_slide: int = 1, end_slide: int = None) -> dict:
     """
@@ -134,7 +133,7 @@ def extract_text_as_markdown(input_path: str, output_path: str = None, start_sli
             "output_path": os.path.abspath(output_path)
         }
     except Exception as e:
-        return format_error_response(e)
+        return {"status": "error", "detail": str(e)}
 
 def extract_slides(input_path: str, output_path: str, start_slide: int, end_slide: int) -> dict:
     """
@@ -194,7 +193,7 @@ def extract_slides(input_path: str, output_path: str, start_slide: int, end_slid
         }
         
     except Exception as e:
-        return format_error_response(e)
+        return {"status": "error", "detail": str(e)}
 
 def export_slides_to_images(
     input_path: str,
@@ -263,7 +262,7 @@ def export_slides_to_images(
         }
         
     except Exception as e:
-        return format_error_response(e)
+        return {"status": "error", "detail": str(e)}
     finally:
         if presentation:
             try:
@@ -324,7 +323,7 @@ def merge_pptx(input_paths: list[str], output_path: str) -> dict:
         }
         
     except Exception as e:
-        return format_error_response(e)
+        return {"status": "error", "detail": str(e)}
     finally:
         if base_presentation:
             try:

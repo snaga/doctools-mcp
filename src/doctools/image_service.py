@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from PIL import Image, ImageGrab
 from datetime import datetime
-from doctools.util_service import format_error_response
 
 def get_image_metadata(path: str) -> Dict[str, Any]:
     """
@@ -19,7 +18,7 @@ def get_image_metadata(path: str) -> Dict[str, Any]:
     try:
         img_path = Path(path)
         if not img_path.exists():
-            return format_error_response(FileNotFoundError(f"File not found: {path}"))
+            return {"status": "error", "detail": f"File not found: {path}"}
 
         with Image.open(img_path) as img:
             width, height = img.size
@@ -31,7 +30,7 @@ def get_image_metadata(path: str) -> Dict[str, Any]:
                 "mode": img.mode
             }
     except Exception as e:
-        return format_error_response(e)
+        return {"status": "error", "detail": str(e)}
 
 def crop_image(
     path: str, 
@@ -59,18 +58,24 @@ def crop_image(
     try:
         img_path = Path(path)
         if not img_path.exists():
-            return format_error_response(FileNotFoundError(f"File not found: {path}"))
+            return {"status": "error", "detail": f"File not found: {path}"}
 
         # 座標の妥当性チェック
         if right <= left or bottom <= top:
-            return format_error_response(ValueError(f"Invalid coordinates: right ({right}) must be > left ({left}) and bottom ({bottom}) must be > top ({top})."))
+            return {
+                "status": "error", 
+                "detail": f"Invalid coordinates: right ({right}) must be > left ({left}) and bottom ({bottom}) must be > top ({top})."
+            }
 
         with Image.open(img_path) as img:
             width, height = img.size
             
             # 座標が画像サイズを超えていないかチェック
             if left < 0 or top < 0 or right > width or bottom > height:
-                return format_error_response(ValueError(f"Coordinates out of bounds: Image size is {width}x{height}, but crop box is ({left}, {top}, {right}, {bottom})."))
+                return {
+                    "status": "error",
+                    "detail": f"Coordinates out of bounds: Image size is {width}x{height}, but crop box is ({left}, {top}, {right}, {bottom})."
+                }
 
             # 切り抜き実行
             cropped_img = img.crop((left, top, right, bottom))
@@ -90,7 +95,7 @@ def crop_image(
                 "output_path": abs_output_path
             }
     except Exception as e:
-        return format_error_response(e)
+        return {"status": "error", "detail": str(e)}
 
 def save_clipboard_image(
     output_dir: Optional[str] = None, 
@@ -113,12 +118,12 @@ def save_clipboard_image(
         img = ImageGrab.grabclipboard()
 
         if img is None:
-            return format_error_response(RuntimeError("No image found in clipboard."))
+            return {"status": "error", "detail": "No image found in clipboard."}
 
         # クリップボードの内容がファイルパス（リスト）の場合も Pillow がよしなに扱うことがあるが、
         # ここでは明示的な画像データのみを対象とする
         if not isinstance(img, Image.Image):
-            return format_error_response(TypeError("Clipboard content is not an image."))
+            return {"status": "error", "detail": "Clipboard content is not an image."}
 
         # 保存先ディレクトリの決定
         target_dir = Path(output_dir) if output_dir else Path.cwd()
@@ -144,4 +149,4 @@ def save_clipboard_image(
             "output_path": abs_output_path
         }
     except Exception as e:
-        return format_error_response(e)
+        return {"status": "error", "detail": str(e)}

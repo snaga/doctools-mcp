@@ -13,7 +13,7 @@
 - **python-pptx**
   - **選定理由**: PowerPoint (.pptx) ファイルの構造解析とテキスト抽出に最適。
 - **pywin32**
-  - **選定理由**: Windows 環境において PowerPoint および Excel を直接操作し、レイアウト崩れのない高精度なスライド画像化、スライド結合、およびハックを用いた Excel シートの PDF エクスポートを実現するために採用。また、Windows クリップボード（画像・テキスト）の操作を低レイヤーで行うためにも利用する。COM (Component Object Model) 経由での自動化を利用する。
+  - **選定理由**: Windows 環境において PowerPoint および Excel を直接操作し、レイアウト崩れのない高精度なスライド画像化、スライド結合、およびハックを用いた Excel シートの PDF エクスポートを実現するために採用。COM (Component Object Model) 経由での自動化を利用する。
 - **openpyxl**
   - **選定理由**: Excel (.xlsx) ファイルの読み書きにおける標準的かつ軽量なライブラリ。依存関係を最小限に抑えるため採用。
 - **MarkItDown**
