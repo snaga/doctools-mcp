@@ -373,7 +373,9 @@ def build_index(index_path, docs_path, description=None, extensions=None, timeou
             
     except Exception as e:
         print(f"❌ 致命的なエラーが発生しました: {e}")
-        raise e
+        # raise e  # スタックトレースを出さないようにコメントアウトまたは削除
+        import sys
+        sys.exit(1) # 異常終了コードを返して安全に終了する
     finally:
         if not dry_run:
             error_logger.save()
