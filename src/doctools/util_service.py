@@ -1,4 +1,5 @@
 import os
+import json
 import zipfile
 from jsonschema import validate, ValidationError
 
@@ -178,5 +179,45 @@ def unzip_file(zip_path: str, output_dir: str = None) -> dict:
         }
     except zipfile.BadZipFile:
         return format_error_response(zipfile.BadZipFile("Invalid or corrupted ZIP file."))
+    except Exception as e:
+        return format_error_response(e)
+
+def get_summary_tree(target_dir: str, depth: int = 2) -> dict:
+    """
+    Load {target_dir}/pageindex.json and recursively filter out children deeper than depth.
+    Root is depth 0.
+    
+    Args:
+        target_dir (str): The directory containing pageindex.json.
+        depth (int): The maximum depth to include in the tree.
+        
+    Returns:
+        dict: The filtered summary tree.
+    """
+    pageindex_path = os.path.join(target_dir, "pageindex.json")
+    if not os.path.exists(pageindex_path):
+        return format_error_response(FileNotFoundError(f"pageindex.json not found in {target_dir}"))
+        
+    try:
+        with open(pageindex_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            
+        def prune_tree(node: dict, current_depth: int, max_depth: int) -> dict:
+            new_node = {k: v for k, v in node.items() if k != "children"}
+            
+            if max_depth is not None and current_depth >= max_depth:
+                if "children" in node:
+                    new_node["children"] = {}
+                return new_node
+                
+            if "children" in node:
+                new_children = {}
+                for key, child in node["children"].items():
+                    new_children[key] = prune_tree(child, current_depth + 1, max_depth)
+                new_node["children"] = new_children
+                
+            return new_node
+            
+        return prune_tree(data, 0, depth)
     except Exception as e:
         return format_error_response(e)

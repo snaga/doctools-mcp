@@ -52,7 +52,7 @@ from doctools.text_service import (
     get_metadata as get_metadata_svc,
     set_clipboard_text as set_clipboard_text_svc
 )
-from doctools.util_service import zip_files as zip_files_svc, unzip_file as unzip_file_svc, format_error_response
+from doctools.util_service import zip_files as zip_files_svc, unzip_file as unzip_file_svc, format_error_response, get_summary_tree as get_summary_tree_svc
 from doctools.search_service import search_index, list_indexes as list_indexes_svc, BASE_DIR_ENV_VAR
 
 mcp = FastMCP("doctools-mcp")
@@ -129,6 +129,18 @@ def search_documents(query: str, directory: str = None, index_name: str = None) 
         return to_json(format_error_response(e))
 
 # --- PageIndex Tools ---
+
+@mcp.tool
+def pageindex_get_summary_tree(target_dir: str, depth: int = 2) -> str:
+    """
+    Load {target_dir}/pageindex.json and recursively filter out children deeper than depth.
+    Root is depth 0.
+    
+    Args:
+        target_dir: The directory containing pageindex.json.
+        depth: The maximum depth to include in the tree (default 2).
+    """
+    return to_json(get_summary_tree_svc(target_dir, depth))
 
 @mcp.tool
 def pageindex_get_tree(input_path: str, node_id: str = None, depth: int = 2) -> str:

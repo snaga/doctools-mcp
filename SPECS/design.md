@@ -86,7 +86,8 @@
 | PageIndex | PI-F05 | pageindex_get_tree | PageIndex ツリーの部分的・段階的取得 | PI-04 |
 | PageIndex | PI-F06 | pageindex_get_node_content | 指定されたノード（ページ等）のコンテンツ抽出 | PI-05 |
 | PageIndex | PI-F07 | pageindex_ctl build | PageIndex 構築支援 CLI ツール | PI-02 |
-| PageIndex | PI-F08 | pageindex_ctl export | インデックス情報の CSV エクスポート | PI-02 |
+| PageIndex | PI-F08 | pageindex_ctl export | インデックス情報の階層型 JSON エクスポート | PI-06 |
+| PageIndex | PI-F09 | pageindex_get_summary_tree | プロジェクト全体のディレクトリツリー（サマリー）取得 | PI-07 |
 
 > **設計注記**: PI-F01 〜 PI-F04 は、AI エージェントのコンテキスト（利用可能ツール数）の肥大化を防ぐため、初期フェーズでは内部 Service 関数としてのみ実装し、直接の MCP ツールとしての露出は行わない。ただし、将来的にオンデマンドでのインデックス構築や検証が必要になった際、即座にツール化可能なシグネチャで設計する。
 
@@ -466,6 +467,8 @@ sequenceDiagram
    - 対応要件: PI-02
    - 設計のポイント
       - 対象ファイルの物理構造抽出から、GCP Gemini API または Vertex AI と連携した要約（サマリー）の自動生成、バリデーション、分散保存までをサポートする。
+      - **スキップロジック**: 対象ファイルの `.pageindex.json` が既に存在する場合、そのインデックスファイルの最終更新日時 (mtime) と元ファイルの mtime を比較する。元ファイルが更新されていない（mtime が古いまたは同じ）場合は、再インデックス化をスキップしてリソースと API コストを節約する。
+      - **LLM クライアントの遅延初期化 (Lazy Initialization)**: 環境変数の読み込みや Gemini/Vertex AI クライアントのセットアップ処理は、スクリプト起動時ではなく、スキップ判定を通過し、実際に AI に要約を依頼する直前に行う。これにより、すべてスキップされる場合の無駄な初期化オーバーヘッドを排除する。
       - 環境変数 `GOOGLE_GENAI_USE_VERTEXAI` が "true" の場合は Vertex AI を使用し（`GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` を参照）、それ以外で `GEMINI_API_KEY` があれば Gemini API を使用するフォールバックロジックを実装する。
       - バックエンドの設定が不足している場合は、構築処理を安全に中断し、標準エラーレスポンス形式でエラーを出力する。
       - リトライポリシー: JSON バリデーションに失敗した場合、AI への再生成依頼を **最大 2 回** まで実行する。
@@ -483,13 +486,24 @@ sequenceDiagram
       - API のレートリミットを考慮したリトライロジックを実装する。
 
 - PI-F08: pageindex_ctl export
-   - 概要: 構築された PageIndex 群のサマリー情報を CSV 形式でエクスポートする。
-   - 対応要件: PI-02
+   - 概要: 構築された PageIndex 群を、ディレクトリ構造を維持した単一の階層型 JSON ファイルとしてエクスポートする。
+   - 対応要件: PI-06
    - 設計のポイント
       - 指定されたディレクトリ配下を再帰的に走査し、すべての `.pageindex.json` を収集する。
-      - 各 JSON のルートレベルの「ファイルパス、タイトル、サマリー」を抽出し、一画の CSV ファイルに出力する。
-      - 出力形式: `filepath, title, summary`
-      - 用途: `ripgrep` 等の外部ツールによる高速なキーワード検索の足掛かりとして利用する。
+      - 指定されたディレクトリをルートとしたツリー構造（ネストされた辞書）をメモリ上に構築する。
+      - 各ディレクトリは子ディレクトリやファイルを持つノードとして表現する。
+      - 各 `.pageindex.json` の内容をそのまま末端ノード（ファイルノード）の値として組み込む。
+      - 出力ファイル名: `pageindex.json` (ルートディレクトリ直下に作成)。
+      - 用途: AI がプロジェクト全体のディレクトリ構造と各ファイルのサマリーを俯瞰して理解できるようにするためのインデックスとして利用する。
+
+- PI-F09: pageindex_get_summary_tree
+   - 概要: プロジェクト全体（ファイルシステム）のディレクトリツリーとサマリーを取得する。(MCP Tool)
+   - 対応要件: PI-07
+   - 設計のポイント
+      - `target_dir` 引数を受け取り、そのディレクトリにある `pageindex.json` を読み込む。
+      - `depth` 引数（デフォルト2など）に基づいて、指定された深さより深いディレクトリ階層を省略（フィルタリング）して返却する。
+      - 返却される JSON 構造は `PAGEINDEX_SCHEMA` とは異なり、ファイルシステムのディレクトリとファイルの関係を自然に表現する形式とする。
+      - これにより、AI は「まずプロジェクト全体のどこに何があるか（PI-F09）」を調べ、「特定のファイルの中身（PI-F05, PI-F06）」を調べるという自然なナビゲーションが可能になる。
 
 ## アーキテクチャ
 
@@ -985,6 +999,16 @@ PDF, PowerPoint, Excel, CSV, HTML, 画像操作, テキスト操作, 共通ユ�
 - **処理**: 指定箇所のフルテキストを抽出し、プレーンテキスト形式で返却する。
 - **出力**: `{"status": "success", "content": "..."}`
 
+##### ツール名: `pageindex_get_summary_tree`
+- **入力**: 
+    - `target_dir`: string (必須) - プロジェクトのルートディレクトリなど、`pageindex.json` が存在するディレクトリ。
+    - `depth`: integer (任意, デフォルト 2) - 取得するディレクトリ階層の深さ。
+- **処理概要**: 
+    - 指定されたディレクトリの `pageindex.json` を読み込む。
+    - 指定された `depth` に基づいてディレクトリ階層をフィルタリング（深い階層を省略）し、AIが俯瞰できる形式のサマリー情報として返却する。
+- **出力**: 
+    - 成功時: JSON文字列 `{"status": "success", "tree": { ... }}`
+
 ### 2. CLI (Index Controller)
 
 検索インデックスの管理・保守を行うコマンドラインインターフェース。
@@ -1289,7 +1313,7 @@ classDiagram
 - `updated_at`: string (ISO8601日時)
 
 ### PageIndex JSON スキーマ (PAGEINDEX_SCHEMA)
-AI が理解しやすいツリー構造を定義する。
+AI が理解しやすい個別のドキュメントのツリー構造を定義する（`.pageindex.json`）。
 
 ```json
 {
@@ -1304,6 +1328,36 @@ AI が理解しやすいツリー構造を定義する。
     "nodes": { "type": "array", "items": { "$ref": "#" } }
   },
   "required": ["title", "node_id", "summary"]
+}
+```
+
+### PageIndex Summary JSON スキーマ (pageindex.json)
+ディレクトリ階層と、各ファイルの PageIndex 情報を統合したツリー構造を定義する。
+
+```json
+{
+  "type": "object",
+  "description": "ディレクトリまたはファイルを表すノード",
+  "properties": {
+    "name": { "type": "string", "description": "ディレクトリ名またはファイル名" },
+    "type": { "type": "string", "enum": ["directory", "file"] },
+    "children": {
+      "type": "object",
+      "description": "type が 'directory' の場合に存在。子ノードの辞書（キーはファイル/ディレクトリ名）",
+      "additionalProperties": { "$ref": "#" }
+    },
+    "pageindex": {
+      "type": "object",
+      "description": "type が 'file' の場合に存在。対象ファイルの .pageindex.json の内容",
+      "properties": {
+        "title": {"type": "string"},
+        "node_id": {"type": "string"},
+        "summary": {"type": "string"},
+        "nodes": { "type": "array" }
+      }
+    }
+  },
+  "required": ["name", "type"]
 }
 ```
 

@@ -131,3 +131,25 @@ index_ctl delete <path> <index_name>
 
 各コマンドで操作対象の `index_name` を指定することで、マルチインデックス環境を管理できます。`list` コマンドを引数なしで実行すると、ベースディレクトリ配下のインデックス名とその説明の一覧が表示されます。
 
+### PageIndex の構築と管理 (`pageindex_ctl`)
+
+AI エージェントが巨大なドキュメントを段階的に探索するための「地図（PageIndex）」を構築・管理します。
+
+```bash
+# 基本: 指定ファイル/ディレクトリの PageIndex (.pageindex.json) を構築
+python src/doctools/pageindex_ctl.py build <target_path> --recursive
+
+# 構築済み PageIndex のサマリーを階層型 JSON 形式で一括エクスポート
+python src/doctools/pageindex_ctl.py export <target_dir>
+
+# 作成された PageIndex インデックスの一覧表示
+python src/doctools/pageindex_ctl.py list <target_dir> --recursive
+
+# PageIndex インデックスの削除
+python src/doctools/pageindex_ctl.py delete <target_path> --recursive
+```
+
+- **賢いスキップ機能 (mtime 比較)**: `build` 実行時、既に `.pageindex.json` が存在し、元ファイルが更新されていない場合は、自動的に構築処理をスキップし、LLM への無駄な API コール（およびコスト）を節約します。
+- **LLM の遅延初期化**: スキップ判定が行われ、実際に AI による要約生成が必要になる直前まで、LLM クライアント（Gemini / Vertex AI）のセットアップは遅延されます。これにより、全ファイルがスキップされるようなケースでの処理が極めて高速に行われます。
+- **階層型 JSON ツリーの構築 (`export`)**: `export` コマンドはディレクトリ構造を維持した単一の `pageindex.json` を生成します。AI は `pageindex_get_summary_tree` ツールを使ってまずこのツリーから「どのフォルダにどんなドキュメントがあるか」を俯瞰し、次に `pageindex_get_tree` で特定ドキュメントの中身（章や節）を探索するという、2段階の自然なナビゲーションが可能になります。
+

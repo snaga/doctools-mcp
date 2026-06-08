@@ -76,8 +76,14 @@ PROMPT_TEMPLATE = """あなたはドキュメント解析のエキスパート�
 JSONのみを出力してください。Markdownのバッククォートなどは不要です。
 """
 
+_llm_model = None
+
 def setup_llm_client():
     """LLM クライアントのセットアップ (Gemini API or Vertex AI)"""
+    global _llm_model
+    if _llm_model is not None:
+        return _llm_model
+
     load_dotenv()
     
     use_vertexai = os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "").lower() == "true"
@@ -91,7 +97,8 @@ def setup_llm_client():
         
         vertexai.init(project=project_id, location=location)
         logger.info(f"✨ Vertex AI を初期化したよ (Project: {project_id}, Location: {location})")
-        return VertexGenerativeModel("gemini-1.5-flash")
+        _llm_model = VertexGenerativeModel("gemini-1.5-flash")
+        return _llm_model
     else:
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
@@ -99,7 +106,8 @@ def setup_llm_client():
         
         genai.configure(api_key=api_key)
         logger.info("✨ Gemini API を初期化したよ")
-        return genai.GenerativeModel('gemini-1.5-flash')
+        _llm_model = genai.GenerativeModel('gemini-1.5-flash')
+        return _llm_model
 
 def generate_summary(model, filename, structure_data):
     """Gemini API または Vertex AI を用いた要約生成"""
@@ -138,10 +146,21 @@ def generate_summary(model, filename, structure_data):
         logger.error(f"❌ {client_type} 呼び出しまたは JSON 解析に失敗したよ: {e}")
         return None
 
-def build_single_pageindex(model, file_path):
+def build_single_pageindex(file_path):
     """単一ファイルの PageIndex 構築"""
     ext = os.path.splitext(file_path)[1].lower()
     
+    pageindex_path = file_path + PAGEINDEX_EXT
+    if os.path.exists(pageindex_path):
+        try:
+            src_mtime = os.path.getmtime(file_path)
+            idx_mtime = os.path.getmtime(pageindex_path)
+            if idx_mtime >= src_mtime:
+                logger.info(f"⏭️ 変更がないためスキップしたよ: {os.path.basename(file_path)}")
+                return True
+        except Exception as e:
+            logger.warning(f"⚠️ mtime の取得に失敗したため、ビルドを続行するよ: {e}")
+
     logger.info(f"🔍 物理構造を抽出中: {os.path.basename(file_path)}")
     
     if ext == ".pdf":
@@ -160,6 +179,12 @@ def build_single_pageindex(model, file_path):
         
     structure = res.get("structure")
     
+    try:
+        model = setup_llm_client()
+    except Exception as e:
+        logger.error(f"❌ LLM クライアントの初期化に失敗したため、構築を中止するよ: {e}")
+        return False
+
     # 要約生成（バリデーション失敗時は最大2回リトライ）
     max_retries = 2
     for attempt in range(max_retries + 1):
@@ -193,12 +218,6 @@ def build_pageindex(args):
     Build PageIndex for a document.
     物理構造抽出 ➔ LLM による要約生成 ➔ バリデーション ➔ 分散保存。
     """
-    try:
-        model = setup_llm_client()
-    except Exception as e:
-        logger.error(f"❌ LLM クライアントの初期化に失敗したため、構築を中止するよ: {e}")
-        return
-        
     target_path = os.path.abspath(args.path)
     logger.info(f"🚀 PageIndex の構築を開始するよ: {target_path}")
     
@@ -235,14 +254,10 @@ def build_pageindex(args):
 
     success_count = 0
     for f in files_to_process:
-        if build_single_pageindex(model, f):
+        if build_single_pageindex(f):
             success_count += 1
             
     logger.info(f"✨ 構築完了！成功: {success_count}/{len(files_to_process)}")
-    
-    # 構築完了後、自動的に export 処理を呼び出し
-    logger.info("📤 サマリーを自動更新（export）するよ...")
-    export_pageindex(args)
 
 
 def list_pageindex(args):
@@ -316,8 +331,8 @@ def delete_pageindex(args):
 
 def export_pageindex(args):
     """
-    Export PageIndex to CSV.
-    全インデックス情報の CSV エクスポート。
+    Export PageIndex to JSON tree.
+    全インデックス情報の階層型 JSON エクスポート。
     """
     target_path = os.path.abspath(args.path)
     if os.path.isfile(target_path):
@@ -347,30 +362,50 @@ def export_pageindex(args):
         logger.warning("エクスポート対象の PageIndex ファイルが見つからなかったよ。")
         return
 
-    output_csv = os.path.join(base_search_dir, "pageindex_summary.csv")
+    tree = {
+        "name": os.path.basename(base_search_dir) or base_search_dir,
+        "type": "directory",
+        "children": {}
+    }
+
+    for idx_file in found_files:
+        try:
+            with open(idx_file, "r", encoding="utf-8") as jf:
+                data = json.load(jf)
+            
+            rel_path = os.path.relpath(idx_file, base_search_dir)
+            parts = rel_path.split(os.sep)
+            
+            current_node = tree
+            for i, part in enumerate(parts):
+                if i == len(parts) - 1:
+                    current_node["children"][part] = {
+                        "name": part,
+                        "type": "file",
+                        "pageindex": data
+                    }
+                else:
+                    if part not in current_node["children"]:
+                        current_node["children"][part] = {
+                            "name": part,
+                            "type": "directory",
+                            "children": {}
+                        }
+                    current_node = current_node["children"][part]
+                    
+        except Exception as e:
+            logger.error(f"❌ {idx_file} の読み込みに失敗したよ: {e}")
+
+    output_json = os.path.join(base_search_dir, "pageindex.json")
     
     try:
-        with open(output_csv, "w", encoding="utf-8", newline="") as f:
-            # 全フィールドをダブルクォートで括る設定
-            writer = csv.writer(f, quoting=csv.QUOTE_ALL)
-            writer.writerow(["filepath", "title", "summary"])
-            
-            for idx_file in found_files:
-                try:
-                    with open(idx_file, "r", encoding="utf-8") as jf:
-                        data = json.load(jf)
-                        writer.writerow([
-                            idx_file,
-                            data.get("title", ""),
-                            data.get("summary", "").replace("\n", " ")
-                        ])
-                except Exception as e:
-                    logger.error(f"❌ {idx_file} の読み込みに失敗したよ: {e}")
+        with open(output_json, "w", encoding="utf-8") as f:
+            json.dump(tree, f, ensure_ascii=False, indent=2)
 
-        logger.info(f"✅ {output_csv} にサマリー情報をエクスポートしたよ！✨")
-        print(os.path.abspath(output_csv))
+        logger.info(f"✅ {output_json} にサマリー情報をエクスポートしたよ！✨")
+        print(os.path.abspath(output_json))
     except Exception as e:
-        logger.error(f"❌ CSV 書き込みに失敗したよ: {e}")
+        logger.error(f"❌ JSON 書き込みに失敗したよ: {e}")
 
 
 def main():
