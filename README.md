@@ -137,16 +137,16 @@ AI エージェントが巨大なドキュメントを段階的に探索する�
 
 ```bash
 # 基本: 指定ファイル/ディレクトリの PageIndex (.pageindex.json) を構築
-python src/doctools/pageindex_ctl.py build <target_path> --recursive
+pageindex_ctl build <target_path> --recursive
 
 # 構築済み PageIndex のサマリーを階層型 JSON 形式で一括エクスポート
-python src/doctools/pageindex_ctl.py export <target_dir>
+pageindex_ctl export <target_dir>
 
 # 作成された PageIndex インデックスの一覧表示
-python src/doctools/pageindex_ctl.py list <target_dir> --recursive
+pageindex_ctl list <target_dir> --recursive
 
 # PageIndex インデックスの削除
-python src/doctools/pageindex_ctl.py delete <target_path> --recursive
+pageindex_ctl delete <target_path> --recursive
 ```
 
 - **賢いスキップ機能 (mtime 比較)**: `build` 実行時、既に `.pageindex.json` が存在し、元ファイルが更新されていない場合は、自動的に構築処理をスキップし、LLM への無駄な API コール（およびコスト）を節約します。
